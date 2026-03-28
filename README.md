@@ -1,10 +1,10 @@
-# Ekaos Install
+# Ekaos Install - NixOS Installation TUI
 
-A terminal user interface (TUI) application that guides users through installing NixOS, following the [official installation guide](https://nixos.org/manual/nixos/stable/#sec-installation).
+A modern, beginner-friendly terminal user interface (TUI) for installing NixOS. Built with Rust and [ratatui](https://github.com/ratatui-org/ratatui).
 
-> **Status**: Phase 0 (Foundation) - In Development
+> **Status**: v0.1.0 (MVP) - Feature Complete
 >
-> This project is in early development. Core infrastructure is in place, but many features are not yet implemented. See [roadmap.md](roadmap.md) for the complete development plan.
+> The installer now has all core functionality for basic NixOS installations! Phases 0-6 complete. See [roadmap.md](roadmap.md) for the complete development plan.
 
 ## Features
 
@@ -15,21 +15,50 @@ A terminal user interface (TUI) application that guides users through installing
 - **Flakes Support**: Generate both traditional and flakes-based configurations
 - **Progress Tracking**: Visual progress indicators throughout installation
 
-## Current Status (Phase 0)
+## Installation Workflow
 
-✅ **Completed**:
-- Basic TUI skeleton with ratatui
-- CLI argument parsing with clap
-- Error handling framework
-- Mock mode for testing
-- VM testing infrastructure
-- GitHub Actions CI
+The installer guides you through 7 comprehensive screens:
 
-🚧 **In Progress**:
-- Screen implementations (Welcome screen only)
-- System detection (planned for Phase 2)
-- Disk operations (planned for Phase 4)
-- Installation execution (planned for Phase 5)
+1. **Welcome Screen** - Pre-flight checks (root access, network, NixOS ISO, disk space)
+2. **Boot Mode Screen** - Select UEFI (systemd-boot) or BIOS (GRUB) bootloader
+3. **Disk Selection Screen** - Choose target disk with size and model information
+4. **Partition Planning Screen** - Configure swap size and review partition layout
+5. **Configuration Screen** - Set hostname, username, password, timezone, locale, and desktop
+6. **Installation Screen** - Real-time progress tracking with detailed logs
+7. **Success Screen** - Installation summary and next steps
+
+## Completed Features (v0.1.0)
+
+✅ TUI skeleton with ratatui
+✅ CLI argument parsing with clap
+✅ Error handling framework
+✅ Mock mode for testing
+✅ VM testing infrastructure
+✅ Screen trait system
+✅ Component architecture
+✅ Input handling
+✅ Theme system
+✅ CPU detection
+✅ RAM detection
+✅ Architecture detection
+✅ Root privilege checking
+✅ NixOS environment validation
+✅ Disk detection and selection
+✅ Partition layout planning
+✅ Swap configuration
+✅ Disk information display
+✅ Hostname configuration
+✅ User account setup
+✅ Password validation
+✅ Timezone selection
+✅ Locale configuration
+✅ Desktop environment options
+✅ NixOS configuration generation
+✅ Hardware configuration generation
+✅ Asynchronous installation
+✅ Real-time progress tracking
+✅ Installation verification
+✅ Success screen with next steps
 
 ## Installation
 
@@ -63,11 +92,13 @@ cargo run -- --mock
 
 ### Real Mode (Requires Root)
 
-Run the actual installer (when fully implemented):
+Run the actual installer:
 
 ```bash
 sudo cargo run
 ```
+
+**Warning**: Real mode will make actual changes to your system. Always test in a VM or use mock mode first!
 
 ### Command-Line Options
 
@@ -83,27 +114,52 @@ Options:
 
 ### Keyboard Navigation
 
-- **Enter**: Proceed to next screen / Confirm
+- **Enter**: Proceed to next screen / Confirm selection
 - **←** / **Backspace**: Go back to previous screen
-- **→**: Go to next screen
-- **?**: Toggle help panel (coming soon)
+- **→**: Go to next screen (when validation passes)
+- **↑** / **↓**: Navigate lists and menus
+- **Tab**: Cycle through input fields and buttons
+- **?**: Toggle help panel
 - **q** / **Esc**: Quit application
 - **Ctrl+C**: Force exit
+
+### Screen-Specific Controls
+
+**Disk Selection Screen**:
+- ↑/↓: Navigate disk list
+- Enter: Select disk and proceed
+
+**Partition Planning Screen**:
+- Tab: Switch between swap size input and proceed button
+- Type numbers for swap size in GB
+
+**Configuration Screen**:
+- Tab: Cycle through all input fields (hostname, username, password, etc.)
+- Type to enter values
+- Select from dropdowns for timezone, locale, and desktop
 
 ## Development
 
 ### Running Tests
 
 ```bash
-# Run all tests
-cargo test
+# Run all tests (118 tests total)
+cargo test -- --test-threads=1
 
 # Run tests with output
-cargo test -- --nocapture
+cargo test -- --nocapture --test-threads=1
+
+# Run only unit tests
+cargo test --lib
 
 # Run only integration tests
 cargo test --test '*'
+
+# Run specific test
+cargo test test_name
 ```
+
+**Note**: Use `--test-threads=1` to avoid test interference with environment variables in mock mode.
 
 ### Code Quality
 
@@ -181,9 +237,9 @@ The application follows a clean architecture with separation of concerns:
 
 See [roadmap.md](roadmap.md) for the complete multi-phase development plan.
 
-**Current Phase**: Phase 0 - Foundation & Infrastructure (Weeks 1-2)
+**Status**: ✅ Phases 0-6 Complete (v0.1.0 MVP)
 
-**Next Phase**: Phase 1 - Core UI Framework (Weeks 3-4)
+**Next Phase**: Phase 7 - Polish & Release (Documentation, error handling improvements, final testing)
 
 ## Contributing
 
@@ -226,6 +282,41 @@ at your option.
 - **Discussions**: [GitHub Discussions](https://github.com/yourusername/ekaos-install/discussions)
 - **Documentation**: See [roadmap.md](roadmap.md) for detailed project plan
 
+## Troubleshooting
+
+### Pre-flight Check Failures
+
+**Root Access Failed**:
+- Run with `sudo` or use `--mock` flag for testing
+- In mock mode: `cargo run -- --mock`
+
+**Network Check Failed**:
+- Verify network connectivity: `ping nixos.org`
+- Check DNS resolution: `nslookup nixos.org`
+- The installer requires internet to download packages
+
+**NixOS ISO Check Failed**:
+- This installer must run from NixOS installation media
+- Download the latest ISO from https://nixos.org/download
+- Use mock mode for testing on non-NixOS systems
+
+**Disk Space Insufficient**:
+- Ensure target disk has at least 10GB free space
+- Consider reducing swap size in partition planning
+
+### Installation Issues
+
+**Installation Fails**:
+- Check the installation logs in the UI
+- Verify disk is not mounted: `umount -R /mnt`
+- Ensure network is stable during installation
+- Try running in mock mode first to verify configuration
+
+**Configuration Errors**:
+- Ensure hostname contains only valid characters (alphanumeric, hyphens)
+- Username must be lowercase and start with a letter
+- Password must be at least 8 characters
+
 ---
 
-**Note**: This project is in active development. The installer is not yet functional for actual NixOS installation. Use at your own risk and always test in VMs first.
+**Note**: This installer performs real system operations. Always test in VMs first. The mock mode allows safe testing of the complete UI flow without making any system changes.

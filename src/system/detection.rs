@@ -5,7 +5,7 @@
 use crate::error::Result;
 use std::fs;
 use std::process::Command;
-use tracing::{debug, warn};
+use tracing::debug;
 
 /// System information
 #[derive(Debug, Clone)]

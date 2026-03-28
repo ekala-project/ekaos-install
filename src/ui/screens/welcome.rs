@@ -9,7 +9,7 @@ use ratatui::{
 };
 use tracing::{debug, warn};
 
-use crate::system::{check_network, is_nixos, is_root, NetworkStatus};
+use crate::system::{check_network, is_nixos, is_root};
 use crate::ui::{icons, theme::AppTheme};
 
 use super::{Screen, ScreenAction};
