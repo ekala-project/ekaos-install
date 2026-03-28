@@ -9,19 +9,16 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{
-    backend::CrosstermBackend,
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
-    Terminal,
-};
+use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 use tracing::{info, warn};
 
 use ekaos_install::{
-    app::{App, AppMode, Screen},
-    ui::{render_footer, render_header, Layout},
+    app::{App, AppMode, Screen as AppScreen},
+    ui::{
+        components::Component, render_footer, render_header, HelpPanel, Layout, Screen,
+        ScreenAction, SystemInfoScreen, WelcomeScreen,
+    },
     APP_NAME, VERSION,
 };
 
@@ -105,8 +102,20 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
     // Create app state
     let mut app = App::new(mode, dry_run);
 
+    // Create screen instances
+    let mut welcome_screen = WelcomeScreen::new(app.is_mock(), dry_run);
+    let mut system_info_screen = SystemInfoScreen::new();
+
+    // Call on_enter for initial screen
+    welcome_screen.on_enter();
+
     // Run the event loop
-    let result = run_event_loop(&mut terminal, &mut app);
+    let result = run_event_loop(
+        &mut terminal,
+        &mut app,
+        &mut welcome_screen,
+        &mut system_info_screen,
+    );
 
     // Restore terminal
     disable_raw_mode()?;
@@ -124,8 +133,30 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
 fn run_event_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
+    welcome_screen: &mut WelcomeScreen,
+    system_info_screen: &mut SystemInfoScreen,
 ) -> Result<()> {
+    let mut previous_screen = app.current_screen;
+
     loop {
+        // Check if we changed screens
+        if previous_screen != app.current_screen {
+            // Call lifecycle methods
+            match previous_screen {
+                AppScreen::Welcome => welcome_screen.on_exit(),
+                AppScreen::SystemInfo => system_info_screen.on_exit(),
+                _ => {}
+            }
+
+            match app.current_screen {
+                AppScreen::Welcome => welcome_screen.on_enter(),
+                AppScreen::SystemInfo => system_info_screen.on_enter(),
+                _ => {}
+            }
+
+            previous_screen = app.current_screen;
+        }
+
         // Draw UI
         terminal.draw(|frame| {
             let layout = Layout::new();
@@ -139,8 +170,51 @@ fn run_event_loop(
                 app.current_screen.title(),
             );
 
-            // Render content based on current screen
-            render_screen_content(frame, content_area, app);
+            // Render current screen
+            match app.current_screen {
+                AppScreen::Welcome => welcome_screen.render(frame, content_area),
+                AppScreen::SystemInfo => system_info_screen.render(frame, content_area),
+                _ => {
+                    // Placeholder for unimplemented screens
+                    use ratatui::{
+                        style::{Color, Modifier, Style},
+                        text::{Line, Span},
+                        widgets::{Block, Borders, Paragraph},
+                    };
+
+                    let lines = vec![
+                        Line::from(""),
+                        Line::from(Span::styled(
+                            "[Screen Not Yet Implemented]",
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .add_modifier(Modifier::BOLD),
+                        )),
+                        Line::from(""),
+                        Line::from("This screen will be implemented in a future phase."),
+                    ];
+
+                    let paragraph = Paragraph::new(lines)
+                        .block(Block::default().borders(Borders::ALL))
+                        .alignment(ratatui::layout::Alignment::Center);
+
+                    frame.render_widget(paragraph, content_area);
+                }
+            }
+
+            // Render help panel if visible
+            if app.help_visible {
+                // Get help content from current screen
+                let help_content = match app.current_screen {
+                    AppScreen::Welcome => welcome_screen.help_content(),
+                    AppScreen::SystemInfo => system_info_screen.help_content(),
+                    _ => vec!["Help not available for this screen".to_string()],
+                };
+
+                let mut temp_help = HelpPanel::new("Help").with_content(help_content);
+                temp_help.set_visible(true);
+                temp_help.render(frame, content_area);
+            }
 
             // Render footer
             render_footer(frame, footer_area, app.current_screen, app.is_mock());
@@ -149,7 +223,67 @@ fn run_event_loop(
         // Handle events
         if event::poll(std::time::Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
-                handle_key_event(app, key.code, key.modifiers)?;
+                // Handle Ctrl+C globally
+                if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL)
+                {
+                    app.exit();
+                    continue;
+                }
+
+                // Handle '?' globally for help
+                if key.code == KeyCode::Char('?') {
+                    app.toggle_help();
+                    continue;
+                }
+
+                // If help is visible, close it on any key
+                if app.help_visible {
+                    app.toggle_help();
+                    continue;
+                }
+
+                // Route input to current screen
+                let action = match app.current_screen {
+                    AppScreen::Welcome => welcome_screen.handle_input(key.code),
+                    AppScreen::SystemInfo => system_info_screen.handle_input(key.code),
+                    _ => {
+                        // For unimplemented screens, allow basic navigation
+                        match key.code {
+                            KeyCode::Enter => ScreenAction::Next,
+                            KeyCode::Left | KeyCode::Backspace => ScreenAction::Back,
+                            KeyCode::Char('q') | KeyCode::Esc => ScreenAction::Exit,
+                            _ => ScreenAction::None,
+                        }
+                    }
+                };
+
+                // Handle screen action
+                match action {
+                    ScreenAction::Next => {
+                        // Check if screen allows proceeding
+                        let can_proceed = match app.current_screen {
+                            AppScreen::Welcome => welcome_screen.can_proceed(),
+                            AppScreen::SystemInfo => system_info_screen.can_proceed(),
+                            _ => true,
+                        };
+
+                        if can_proceed {
+                            app.next_screen()?;
+                        }
+                    }
+                    ScreenAction::Back => {
+                        app.previous_screen()?;
+                    }
+                    ScreenAction::Exit => {
+                        app.exit();
+                    }
+                    ScreenAction::ToggleHelp => {
+                        app.toggle_help();
+                    }
+                    ScreenAction::None => {
+                        // Do nothing
+                    }
+                }
             }
         }
 
@@ -157,208 +291,6 @@ fn run_event_loop(
         if app.should_exit {
             break;
         }
-    }
-
-    Ok(())
-}
-
-/// Render content for the current screen
-fn render_screen_content(
-    frame: &mut ratatui::Frame,
-    area: ratatui::layout::Rect,
-    app: &App,
-) {
-    match app.current_screen {
-        Screen::Welcome => render_welcome_screen(frame, area, app),
-        Screen::SystemInfo => render_placeholder_screen(frame, area, "System Information"),
-        Screen::DiskSelection => render_placeholder_screen(frame, area, "Disk Selection"),
-        Screen::PartitionPlanning => render_placeholder_screen(frame, area, "Partition Planning"),
-        Screen::Configuration => render_placeholder_screen(frame, area, "Configuration"),
-        Screen::Installation => render_placeholder_screen(frame, area, "Installation"),
-        Screen::Complete => render_complete_screen(frame, area),
-    }
-}
-
-/// Render the welcome screen
-fn render_welcome_screen(
-    frame: &mut ratatui::Frame,
-    area: ratatui::layout::Rect,
-    app: &App,
-) {
-    let mut lines = vec![
-        Line::from(vec![Span::styled(
-            "Welcome to Ekaos Install",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(""),
-        Line::from("A guided installer for NixOS"),
-        Line::from(""),
-        Line::from(""),
-    ];
-
-    // Add mode indicator
-    if app.is_mock() {
-        lines.push(Line::from(vec![Span::styled(
-            "Running in MOCK MODE",
-            Style::default()
-                .fg(Color::Magenta)
-                .add_modifier(Modifier::BOLD),
-        )]));
-        lines.push(Line::from("(No actual system changes will be made)"));
-    }
-
-    if app.dry_run {
-        lines.push(Line::from(vec![Span::styled(
-            "DRY-RUN MODE ENABLED",
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )]));
-    }
-
-    lines.push(Line::from(""));
-    lines.push(Line::from(""));
-    lines.push(Line::from(vec![
-        Span::raw("Press "),
-        Span::styled(
-            "Enter",
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::raw(" to continue"),
-    ]));
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White));
-
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .alignment(ratatui::layout::Alignment::Center);
-
-    frame.render_widget(paragraph, area);
-}
-
-/// Render a placeholder screen (for screens not yet implemented)
-fn render_placeholder_screen(
-    frame: &mut ratatui::Frame,
-    area: ratatui::layout::Rect,
-    title: &str,
-) {
-    let lines = vec![
-        Line::from(""),
-        Line::from(""),
-        Line::from(vec![Span::styled(
-            title,
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(""),
-        Line::from(vec![Span::styled(
-            "[Coming Soon]",
-            Style::default().fg(Color::Yellow),
-        )]),
-        Line::from(""),
-        Line::from(""),
-        Line::from("This screen will be implemented in a future phase."),
-    ];
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White));
-
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .alignment(ratatui::layout::Alignment::Center);
-
-    frame.render_widget(paragraph, area);
-}
-
-/// Render the completion screen
-fn render_complete_screen(frame: &mut ratatui::Frame, area: ratatui::layout::Rect) {
-    let lines = vec![
-        Line::from(""),
-        Line::from(""),
-        Line::from(vec![Span::styled(
-            "✓ Installation Complete!",
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(""),
-        Line::from(""),
-        Line::from("NixOS has been successfully installed."),
-        Line::from(""),
-        Line::from("Next steps:"),
-        Line::from("  1. Remove the installation media"),
-        Line::from("  2. Reboot your system"),
-        Line::from("  3. Login with your created user account"),
-        Line::from(""),
-        Line::from(""),
-        Line::from(vec![
-            Span::raw("Press "),
-            Span::styled("q", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
-            Span::raw(" to exit"),
-        ]),
-    ];
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White));
-
-    let paragraph = Paragraph::new(lines)
-        .block(block)
-        .alignment(ratatui::layout::Alignment::Center);
-
-    frame.render_widget(paragraph, area);
-}
-
-/// Handle keyboard input
-fn handle_key_event(app: &mut App, key: KeyCode, modifiers: KeyModifiers) -> Result<()> {
-    // Handle Ctrl+C
-    if key == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
-        app.exit();
-        return Ok(());
-    }
-
-    match key {
-        KeyCode::Char('q') | KeyCode::Esc => {
-            // Ask for confirmation on certain screens
-            if matches!(app.current_screen, Screen::Welcome | Screen::Complete) {
-                app.exit();
-            } else {
-                // For other screens, go back or exit
-                if app.current_screen.can_go_back() {
-                    app.previous_screen()?;
-                } else {
-                    app.exit();
-                }
-            }
-        }
-        KeyCode::Enter => {
-            // Progress to next screen
-            if app.current_screen.next().is_some() {
-                app.next_screen()?;
-            } else {
-                // On final screen, exit
-                app.exit();
-            }
-        }
-        KeyCode::Left | KeyCode::Backspace => {
-            // Go to previous screen
-            app.previous_screen()?;
-        }
-        KeyCode::Right => {
-            // Go to next screen
-            if app.current_screen.next().is_some() {
-                app.next_screen()?;
-            }
-        }
-        _ => {}
     }
 
     Ok(())

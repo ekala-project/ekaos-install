@@ -101,6 +101,8 @@ pub struct App {
     pub should_exit: bool,
     /// Dry-run mode (show actions without executing)
     pub dry_run: bool,
+    /// Whether help panel is visible
+    pub help_visible: bool,
 }
 
 impl App {
@@ -111,7 +113,13 @@ impl App {
             current_screen: Screen::Welcome,
             should_exit: false,
             dry_run,
+            help_visible: false,
         }
+    }
+
+    /// Toggle help panel visibility
+    pub fn toggle_help(&mut self) {
+        self.help_visible = !self.help_visible;
     }
 
     /// Navigate to the next screen
