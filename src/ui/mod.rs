@@ -3,6 +3,11 @@
 //! This module contains all TUI-related code including layouts,
 //! reusable components, and screen implementations.
 
+pub mod components;
 pub mod layout;
 
+pub use components::{
+    Button, CheckboxList, ConfirmDialog, HelpPanel, InputField, MessageType, ProgressBar,
+    SelectList, StatusMessage,
+};
 pub use layout::{render_footer, render_header, Layout};
