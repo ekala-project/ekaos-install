@@ -14,7 +14,7 @@ pub use components::{
 };
 pub use layout::{render_footer, render_header, Layout};
 pub use screens::{
-    ConfigurationScreen, DiskSelectionScreen, PartitionPlanningScreen, Screen, ScreenAction,
-    SystemInfoScreen, WelcomeScreen,
+    ConfigurationScreen, DiskSelectionScreen, InstallationScreen, PartitionPlanningScreen, Screen,
+    ScreenAction, SuccessScreen, SystemInfoScreen, WelcomeScreen,
 };
 pub use theme::{icons, spacing, AppTheme};

@@ -17,8 +17,8 @@ use ekaos_install::{
     app::{App, AppMode, Screen as AppScreen},
     ui::{
         components::Component, render_footer, render_header, ConfigurationScreen,
-        DiskSelectionScreen, HelpPanel, Layout, PartitionPlanningScreen, Screen, ScreenAction,
-        SystemInfoScreen, WelcomeScreen,
+        DiskSelectionScreen, HelpPanel, InstallationScreen, Layout, PartitionPlanningScreen,
+        Screen, ScreenAction, SuccessScreen, SystemInfoScreen, WelcomeScreen,
     },
     APP_NAME, VERSION,
 };
@@ -109,6 +109,8 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
     let mut disk_selection_screen = DiskSelectionScreen::new();
     let mut partition_planning_screen = PartitionPlanningScreen::new();
     let mut configuration_screen = ConfigurationScreen::new();
+    let mut installation_screen = InstallationScreen::new();
+    let mut success_screen = SuccessScreen::new();
 
     // Call on_enter for initial screen
     welcome_screen.on_enter();
@@ -122,6 +124,8 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
         &mut disk_selection_screen,
         &mut partition_planning_screen,
         &mut configuration_screen,
+        &mut installation_screen,
+        &mut success_screen,
     );
 
     // Restore terminal
@@ -145,6 +149,8 @@ fn run_event_loop(
     disk_selection_screen: &mut DiskSelectionScreen,
     partition_planning_screen: &mut PartitionPlanningScreen,
     configuration_screen: &mut ConfigurationScreen,
+    installation_screen: &mut InstallationScreen,
+    success_screen: &mut SuccessScreen,
 ) -> Result<()> {
     let mut previous_screen = app.current_screen;
 
@@ -158,7 +164,8 @@ fn run_event_loop(
                 AppScreen::DiskSelection => disk_selection_screen.on_exit(),
                 AppScreen::PartitionPlanning => partition_planning_screen.on_exit(),
                 AppScreen::Configuration => configuration_screen.on_exit(),
-                _ => {}
+                AppScreen::Installation => installation_screen.on_exit(),
+                AppScreen::Complete => success_screen.on_exit(),
             }
 
             match app.current_screen {
@@ -181,7 +188,13 @@ fn run_event_loop(
                     configuration_screen.set_boot_mode(system_info_screen.boot_mode);
                     configuration_screen.on_enter();
                 }
-                _ => {}
+                AppScreen::Installation => {
+                    // Start installation with collected configuration
+                    let config = configuration_screen.get_config().clone();
+                    installation_screen.start_installation(config, "/mnt".to_string(), app.is_mock());
+                    installation_screen.on_enter();
+                }
+                AppScreen::Complete => success_screen.on_enter(),
             }
 
             previous_screen = app.current_screen;
@@ -209,32 +222,8 @@ fn run_event_loop(
                     partition_planning_screen.render(frame, content_area)
                 }
                 AppScreen::Configuration => configuration_screen.render(frame, content_area),
-                _ => {
-                    // Placeholder for unimplemented screens
-                    use ratatui::{
-                        style::{Color, Modifier, Style},
-                        text::{Line, Span},
-                        widgets::{Block, Borders, Paragraph},
-                    };
-
-                    let lines = vec![
-                        Line::from(""),
-                        Line::from(Span::styled(
-                            "[Screen Not Yet Implemented]",
-                            Style::default()
-                                .fg(Color::Yellow)
-                                .add_modifier(Modifier::BOLD),
-                        )),
-                        Line::from(""),
-                        Line::from("This screen will be implemented in a future phase."),
-                    ];
-
-                    let paragraph = Paragraph::new(lines)
-                        .block(Block::default().borders(Borders::ALL))
-                        .alignment(ratatui::layout::Alignment::Center);
-
-                    frame.render_widget(paragraph, content_area);
-                }
+                AppScreen::Installation => installation_screen.render(frame, content_area),
+                AppScreen::Complete => success_screen.render(frame, content_area),
             }
 
             // Render help panel if visible
@@ -246,7 +235,8 @@ fn run_event_loop(
                     AppScreen::DiskSelection => disk_selection_screen.help_content(),
                     AppScreen::PartitionPlanning => partition_planning_screen.help_content(),
                     AppScreen::Configuration => configuration_screen.help_content(),
-                    _ => vec!["Help not available for this screen".to_string()],
+                    AppScreen::Installation => installation_screen.help_content(),
+                    AppScreen::Complete => success_screen.help_content(),
                 };
 
                 let mut temp_help = HelpPanel::new("Help").with_content(help_content);
@@ -288,15 +278,8 @@ fn run_event_loop(
                         partition_planning_screen.handle_input(key.code)
                     }
                     AppScreen::Configuration => configuration_screen.handle_input(key.code),
-                    _ => {
-                        // For unimplemented screens, allow basic navigation
-                        match key.code {
-                            KeyCode::Enter => ScreenAction::Next,
-                            KeyCode::Left | KeyCode::Backspace => ScreenAction::Back,
-                            KeyCode::Char('q') | KeyCode::Esc => ScreenAction::Exit,
-                            _ => ScreenAction::None,
-                        }
-                    }
+                    AppScreen::Installation => installation_screen.handle_input(key.code),
+                    AppScreen::Complete => success_screen.handle_input(key.code),
                 };
 
                 // Handle screen action
@@ -309,7 +292,8 @@ fn run_event_loop(
                             AppScreen::DiskSelection => disk_selection_screen.can_proceed(),
                             AppScreen::PartitionPlanning => partition_planning_screen.can_proceed(),
                             AppScreen::Configuration => configuration_screen.can_proceed(),
-                            _ => true,
+                            AppScreen::Installation => installation_screen.can_proceed(),
+                            AppScreen::Complete => success_screen.can_proceed(),
                         };
 
                         if can_proceed {
