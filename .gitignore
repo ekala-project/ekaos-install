@@ -31,3 +31,5 @@ Cargo.lock
 
 # CI/CD
 .cache/
+
+roadmap.md

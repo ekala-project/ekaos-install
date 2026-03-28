@@ -231,7 +231,6 @@ impl CommandExecutor for MockExecutor {
 }
 
 /// Builder for safely constructing and executing system commands
-#[derive(Debug)]
 pub struct SafeCommand<'a> {
     command: String,
     args: Vec<String>,

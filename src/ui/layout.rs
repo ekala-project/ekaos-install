@@ -55,7 +55,7 @@ impl Layout {
 }
 
 /// Render the header with progress indicator and title
-pub fn render_header(frame: &mut Frame, area: Rect, screen: Screen, title: &str) {
+pub fn render_header(frame: &mut Frame<'_>, area: Rect, screen: Screen, title: &str) {
     let (current, total) = screen.step_number();
     let progress = (current as f64 / total as f64) * 100.0;
 
@@ -84,7 +84,7 @@ pub fn render_header(frame: &mut Frame, area: Rect, screen: Screen, title: &str)
 }
 
 /// Render the footer with navigation hints
-pub fn render_footer(frame: &mut Frame, area: Rect, screen: Screen, is_mock: bool) {
+pub fn render_footer(frame: &mut Frame<'_>, area: Rect, screen: Screen, is_mock: bool) {
     let mut hints = Vec::new();
 
     // Add navigation hints based on current screen
@@ -133,7 +133,7 @@ pub fn render_footer(frame: &mut Frame, area: Rect, screen: Screen, is_mock: boo
 }
 
 /// Render a centered message (useful for welcome/completion screens)
-pub fn render_centered_message(frame: &mut Frame, area: Rect, lines: Vec<Line>) {
+pub fn render_centered_message(frame: &mut Frame<'_>, area: Rect, lines: Vec<Line<'_>>) {
     let block = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White));

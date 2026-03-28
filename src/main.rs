@@ -129,7 +129,7 @@ fn run_event_loop(
         // Draw UI
         terminal.draw(|frame| {
             let layout = Layout::new();
-            let (header_area, content_area, footer_area) = layout.split(frame.area());
+            let (header_area, content_area, footer_area) = layout.split(frame.size());
 
             // Render header
             render_header(
