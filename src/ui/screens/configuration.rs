@@ -232,8 +232,8 @@ impl Screen for ConfigurationScreen {
         render_navigation_hints(
             frame,
             &[
-                ("Tab", "Next field"),
-                ("Shift+Tab", "Previous"),
+                ("↑↓", "Navigate fields"),
+                ("Tab", "Next"),
                 ("Enter", "Continue"),
                 ("←", "Back"),
                 ("q", "Quit"),
@@ -266,6 +266,14 @@ impl Screen for ConfigurationScreen {
                 ScreenAction::None
             }
             KeyCode::BackTab => {
+                self.focus_previous();
+                ScreenAction::None
+            }
+            KeyCode::Down => {
+                self.focus_next();
+                ScreenAction::None
+            }
+            KeyCode::Up => {
                 self.focus_previous();
                 ScreenAction::None
             }
@@ -336,8 +344,8 @@ impl Screen for ConfigurationScreen {
             "".to_string(),
             "## Keyboard Shortcuts".to_string(),
             "".to_string(),
-            "- Tab: Move to next field".to_string(),
-            "- Shift+Tab: Move to previous field".to_string(),
+            "- ↑↓: Navigate between fields".to_string(),
+            "- Tab / Shift+Tab: Also navigate fields".to_string(),
             "- Enter: Validate and continue".to_string(),
             "- ← / Backspace: Go back (when not in a text field)".to_string(),
             "- ?: Toggle this help panel".to_string(),
@@ -397,5 +405,31 @@ mod tests {
         let help = screen.help_content();
         assert!(!help.is_empty());
         assert!(help[0].contains("System Configuration"));
+    }
+
+    #[test]
+    fn test_arrow_key_navigation() {
+        let mut screen = ConfigurationScreen::new();
+        assert_eq!(screen.focused_field, FocusedField::Hostname);
+
+        // Down arrow moves to next field
+        screen.handle_input(KeyCode::Down);
+        assert_eq!(screen.focused_field, FocusedField::Username);
+
+        screen.handle_input(KeyCode::Down);
+        assert_eq!(screen.focused_field, FocusedField::Password);
+
+        screen.handle_input(KeyCode::Down);
+        assert_eq!(screen.focused_field, FocusedField::PasswordConfirm);
+
+        // Up arrow moves to previous field
+        screen.handle_input(KeyCode::Up);
+        assert_eq!(screen.focused_field, FocusedField::Password);
+
+        screen.handle_input(KeyCode::Up);
+        assert_eq!(screen.focused_field, FocusedField::Username);
+
+        screen.handle_input(KeyCode::Up);
+        assert_eq!(screen.focused_field, FocusedField::Hostname);
     }
 }

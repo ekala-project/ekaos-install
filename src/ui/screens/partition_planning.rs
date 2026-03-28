@@ -21,6 +21,32 @@ use crate::ui::{
 
 use super::{Screen, ScreenAction};
 
+/// Available filesystem options for root partition
+const ROOT_FILESYSTEM_OPTIONS: &[(&str, &str)] = &[
+    ("ext4", "Reliable journaling filesystem (recommended)"),
+    ("btrfs", "Modern CoW filesystem with snapshots"),
+    ("xfs", "High-performance journaling filesystem"),
+    ("zfs", "Advanced filesystem with data integrity"),
+];
+
+/// Focus mode for two-level navigation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FocusMode {
+    /// Browsing partitions with Up/Down
+    PartitionList,
+    /// Editing fields within selected partition
+    PartitionEdit,
+}
+
+/// Editable field within a partition
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EditableField {
+    /// Size field (only for swap partition)
+    Size,
+    /// Filesystem type (only for root partition)
+    FilesystemType,
+}
+
 /// Partition planning screen state
 pub struct PartitionPlanningScreen {
     /// Application theme
@@ -39,6 +65,12 @@ pub struct PartitionPlanningScreen {
     swap_input: InputField,
     /// Whether the swap field is focused
     swap_focused: bool,
+    /// Selected partition index for cursor navigation
+    selected_partition_idx: usize,
+    /// Current focus mode (partition list vs editing)
+    focus_mode: FocusMode,
+    /// Selected field within partition (when in edit mode)
+    selected_field: Option<EditableField>,
 }
 
 /// Partition information
@@ -84,6 +116,9 @@ impl PartitionPlanningScreen {
             swap_size_gb: 8,
             swap_input,
             swap_focused: false,
+            selected_partition_idx: 0,
+            focus_mode: FocusMode::PartitionList,
+            selected_field: None,
         }
     }
 
@@ -267,6 +302,130 @@ impl PartitionPlanningScreen {
             .style(self.theme.text());
         frame.render_widget(bar_para, area);
     }
+
+    // ===== Partition Navigation Methods =====
+
+    /// Select previous partition in the list
+    fn select_previous_partition(&mut self) {
+        if self.selected_partition_idx > 0 {
+            self.selected_partition_idx -= 1;
+        }
+    }
+
+    /// Select next partition in the list
+    fn select_next_partition(&mut self) {
+        if self.selected_partition_idx < self.partitions.len().saturating_sub(1) {
+            self.selected_partition_idx += 1;
+        }
+    }
+
+    /// Enter edit mode for the selected partition
+    fn enter_edit_mode(&mut self) {
+        if self.can_edit_partition(self.selected_partition_idx) {
+            self.focus_mode = FocusMode::PartitionEdit;
+            // Select the first editable field
+            let fields = self.get_editable_fields(self.selected_partition_idx);
+            self.selected_field = fields.first().copied();
+        }
+    }
+
+    /// Exit edit mode and return to partition list
+    fn exit_edit_mode(&mut self) {
+        self.focus_mode = FocusMode::PartitionList;
+        self.selected_field = None;
+        // If we were editing swap size via InputField, unfocus it
+        if self.swap_focused {
+            self.swap_focused = false;
+            self.swap_input.set_focused(false);
+            self.update_swap_size();
+        }
+    }
+
+    /// Select previous field within the current partition
+    fn select_previous_field(&mut self) {
+        let fields = self.get_editable_fields(self.selected_partition_idx);
+        if fields.is_empty() {
+            return;
+        }
+
+        if let Some(current_field) = self.selected_field {
+            if let Some(idx) = fields.iter().position(|f| *f == current_field) {
+                if idx > 0 {
+                    self.selected_field = Some(fields[idx - 1]);
+                }
+            }
+        }
+    }
+
+    /// Select next field within the current partition
+    fn select_next_field(&mut self) {
+        let fields = self.get_editable_fields(self.selected_partition_idx);
+        if fields.is_empty() {
+            return;
+        }
+
+        if let Some(current_field) = self.selected_field {
+            if let Some(idx) = fields.iter().position(|f| *f == current_field) {
+                if idx < fields.len() - 1 {
+                    self.selected_field = Some(fields[idx + 1]);
+                }
+            }
+        }
+    }
+
+    // ===== Filesystem Management Methods =====
+
+    /// Cycle through filesystem options (direction: -1 left, +1 right)
+    fn cycle_filesystem(&mut self, direction: i32) {
+        if self.selected_field != Some(EditableField::FilesystemType) {
+            return;
+        }
+
+        let partition_idx = self.selected_partition_idx;
+        if partition_idx >= self.partitions.len() {
+            return;
+        }
+
+        let current_fs = &self.partitions[partition_idx].fstype;
+        let options: Vec<&str> = ROOT_FILESYSTEM_OPTIONS.iter().map(|(fs, _)| *fs).collect();
+
+        let current_idx = options.iter().position(|&fs| fs == current_fs).unwrap_or(0);
+
+        let new_idx = if direction > 0 {
+            (current_idx + 1) % options.len()
+        } else {
+            (current_idx + options.len() - 1) % options.len()
+        };
+
+        self.partitions[partition_idx].fstype = options[new_idx].to_string();
+    }
+
+    /// Get list of editable fields for a partition
+    fn get_editable_fields(&self, partition_idx: usize) -> Vec<EditableField> {
+        if partition_idx >= self.partitions.len() {
+            return Vec::new();
+        }
+
+        let partition = &self.partitions[partition_idx];
+        let mut fields = Vec::new();
+
+        // Root partition can edit filesystem type
+        if partition.mountpoint == "/" {
+            fields.push(EditableField::FilesystemType);
+        }
+
+        // Swap partition can edit size
+        if partition.fstype == "swap" {
+            fields.push(EditableField::Size);
+        }
+
+        fields
+    }
+
+    /// Check if a partition can be edited
+    fn can_edit_partition(&self, partition_idx: usize) -> bool {
+        !self.get_editable_fields(partition_idx).is_empty()
+    }
 }
 
 impl Default for PartitionPlanningScreen {
@@ -358,39 +517,120 @@ impl Screen for PartitionPlanningScreen {
         .alignment(ratatui::layout::Alignment::Center);
         frame.render_widget(help_para, input_layout[2]);
 
-        // Partition list
-        let partition_items: Vec<ListItem> = self
-            .partitions
-            .iter()
-            .map(|part| {
-                let lines = vec![
-                    Line::from(vec![
-                        Span::styled(&part.label, self.theme.success_bold()),
-                        Span::raw("  "),
-                        Span::styled(format!("[{}]", part.size_human()), self.theme.text_muted()),
-                    ]),
-                    Line::from(vec![
-                        Span::raw("  "),
-                        Span::styled("Type: ", self.theme.text_muted()),
-                        Span::styled(&part.fstype, self.theme.text()),
-                        Span::raw("  |  "),
-                        Span::styled("Mount: ", self.theme.text_muted()),
-                        Span::styled(&part.mountpoint, self.theme.text()),
-                    ]),
+        // Partition list - hierarchical display with cursor
+        let mut partition_lines: Vec<Line> = Vec::new();
+        partition_lines.push(Line::from("")); // Top padding
+
+        for (idx, partition) in self.partitions.iter().enumerate() {
+            let is_selected = idx == self.selected_partition_idx;
+            let is_in_edit_mode = is_selected && self.focus_mode == FocusMode::PartitionEdit;
+            let can_edit = self.can_edit_partition(idx);
+
+            // Partition header line with cursor
+            let cursor = if is_selected && self.focus_mode == FocusMode::PartitionList {
+                "> "
+            } else {
+                "  "
+            };
+
+            let header_style = if is_selected && self.focus_mode == FocusMode::PartitionList {
+                self.theme.focused_item()
+            } else {
+                self.theme.text()
+            };
+
+            partition_lines.push(Line::from(vec![
+                Span::styled(cursor, header_style),
+                Span::styled(&partition.label, header_style),
+                Span::styled(
+                    format!("  [{}]", partition.size_human()),
+                    if is_selected { self.theme.text() } else { self.theme.text_muted() }
+                ),
+            ]));
+
+            // Get editable fields for this partition
+            let editable_fields = self.get_editable_fields(idx);
+
+            // Size field (for swap partition)
+            if editable_fields.contains(&EditableField::Size) {
+                let is_size_focused = is_in_edit_mode && self.selected_field == Some(EditableField::Size);
+                let field_cursor = if is_size_focused { "  > " } else { "    " };
+                let field_style = if is_size_focused {
+                    self.theme.focused_item()
+                } else {
+                    self.theme.text()
+                };
+
+                partition_lines.push(Line::from(vec![
+                    Span::styled(field_cursor, field_style),
+                    Span::styled("Size: ", if is_size_focused { self.theme.text() } else { self.theme.text_muted() }),
+                    Span::styled(partition.size_human(), field_style),
+                ]));
+            } else {
+                // Show size as read-only
+                partition_lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled("Size: ", self.theme.text_muted()),
+                    Span::styled(format!("{} (fixed)", partition.size_human()), self.theme.text()),
+                ]));
+            }
+
+            // Filesystem type field
+            if editable_fields.contains(&EditableField::FilesystemType) {
+                let is_type_focused = is_in_edit_mode && self.selected_field == Some(EditableField::FilesystemType);
+                let field_cursor = if is_type_focused { "  > " } else { "    " };
+
+                // Show filesystem options with current selection
+                let mut fs_spans = vec![
+                    Span::styled(field_cursor, if is_type_focused { self.theme.focused_item() } else { self.theme.text() }),
+                    Span::styled("Type: ", if is_type_focused { self.theme.text() } else { self.theme.text_muted() }),
                 ];
 
-                ListItem::new(lines)
-            })
-            .collect();
+                let options: Vec<&str> = ROOT_FILESYSTEM_OPTIONS.iter().map(|(fs, _)| *fs).collect();
+                for (i, &fs) in options.iter().enumerate() {
+                    if i > 0 {
+                        fs_spans.push(Span::styled("  ", self.theme.text_muted()));
+                    }
 
-        let partition_list = List::new(partition_items).block(
+                    if fs == partition.fstype {
+                        fs_spans.push(Span::styled(
+                            format!("{} ◄", fs),
+                            if is_type_focused { self.theme.focused_item() } else { self.theme.success() }
+                        ));
+                    } else if is_type_focused {
+                        fs_spans.push(Span::styled(fs, self.theme.text_muted()));
+                    }
+                }
+
+                partition_lines.push(Line::from(fs_spans));
+            } else {
+                // Show filesystem type as read-only
+                partition_lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled("Type: ", self.theme.text_muted()),
+                    Span::styled(&partition.fstype, self.theme.text()),
+                ]));
+            }
+
+            // Mount point (always read-only)
+            partition_lines.push(Line::from(vec![
+                Span::raw("    "),
+                Span::styled("Mount: ", self.theme.text_muted()),
+                Span::styled(&partition.mountpoint, self.theme.text()),
+            ]));
+
+            // Spacing between partitions
+            partition_lines.push(Line::from(""));
+        }
+
+        let partition_para = Paragraph::new(partition_lines).block(
             Block::default()
                 .borders(Borders::ALL)
                 .title(" Partition Layout ")
                 .border_style(self.theme.border_style()),
         );
 
-        frame.render_widget(partition_list, chunks[3]);
+        frame.render_widget(partition_para, chunks[3]);
 
         // Summary
         let summary_block = Block::default()
@@ -418,77 +658,152 @@ impl Screen for PartitionPlanningScreen {
             .alignment(ratatui::layout::Alignment::Center);
         frame.render_widget(summary_para, chunks[4]);
 
-        // Navigation hints
-        render_navigation_hints(
-            frame,
-            &[
-                ("Tab", "Edit"),
-                ("↑↓", "Adjust"),
-                ("←", "Back"),
-                ("Enter", "Continue"),
+        // Navigation hints - context-sensitive based on focus mode
+        let hints = match self.focus_mode {
+            FocusMode::PartitionList => vec![
+                ("↑↓", "Navigate"),
+                ("Enter", "Edit Partition"),
+                ("Tab", "Quick Edit Swap"),
+                ("→", "Continue"),
                 ("?", "Help"),
                 ("q", "Quit"),
             ],
-            &self.theme,
-            chunks[5],
-        );
+            FocusMode::PartitionEdit => {
+                if self.selected_field == Some(EditableField::FilesystemType) {
+                    vec![
+                        ("↑↓", "Navigate Fields"),
+                        ("←→", "Change Filesystem"),
+                        ("Enter", "Confirm"),
+                        ("Esc", "Cancel"),
+                        ("?", "Help"),
+                    ]
+                } else {
+                    vec![
+                        ("↑↓", "Navigate Fields"),
+                        ("Enter", "Edit Size"),
+                        ("Esc", "Exit Edit Mode"),
+                        ("?", "Help"),
+                    ]
+                }
+            }
+        };
+
+        render_navigation_hints(frame, &hints, &self.theme, chunks[5]);
     }
 
     fn handle_input(&mut self, key: KeyCode) -> ScreenAction {
-        // Try standard handlers first (quit, help)
-        if let Some(action) = self.handle_standard_input(key) {
-            return action;
-        }
-        // Try back handler (only when not focused on input)
-        if !self.swap_focused {
-            if let Some(action) = self.handle_back_input(key) {
-                return action;
+        // Handle Escape specially based on mode
+        if key == KeyCode::Esc {
+            if self.swap_focused {
+                // Exit swap input field
+                self.swap_focused = false;
+                self.swap_input.set_focused(false);
+                self.update_swap_size();
+                return ScreenAction::None;
+            } else if self.focus_mode == FocusMode::PartitionEdit {
+                // Exit edit mode
+                self.exit_edit_mode();
+                return ScreenAction::None;
+            } else {
+                // In partition list mode, Escape quits
+                return ScreenAction::Exit;
             }
         }
 
-        // Handle screen-specific keys
-        match key {
-            KeyCode::Tab => {
-                // Toggle focus on swap input field
-                self.swap_focused = !self.swap_focused;
-                self.swap_input.set_focused(self.swap_focused);
-                if !self.swap_focused {
-                    // Validate and update when losing focus
-                    self.update_swap_size();
-                }
-                ScreenAction::None
-            }
-            KeyCode::Up => {
-                // Adjust swap size up by 1 GB
-                self.adjust_swap_size(1);
-                ScreenAction::None
-            }
-            KeyCode::Down => {
-                // Adjust swap size down by 1 GB
-                self.adjust_swap_size(-1);
-                ScreenAction::None
-            }
-            KeyCode::Enter => {
-                if self.swap_focused {
-                    // Unfocus and validate when Enter is pressed in input
+        // Try standard handlers for other keys (quit with 'q', help with '?')
+        if let Some(action) = self.handle_standard_input(key) {
+            return action;
+        }
+
+        // If swap input field is focused, handle that separately
+        if self.swap_focused {
+            match key {
+                KeyCode::Tab | KeyCode::Enter => {
+                    // Unfocus and validate when exiting swap input
                     self.swap_focused = false;
                     self.swap_input.set_focused(false);
                     self.update_swap_size();
                     ScreenAction::None
-                } else {
-                    // Continue to next screen
-                    ScreenAction::Next
                 }
-            }
-            _ => {
-                // If swap field is focused, handle input events
-                if self.swap_focused {
+                _ => {
+                    // Pass input to the InputField
                     if let Some(event) = keycode_to_input_event(key) {
                         Interactive::handle_input(&mut self.swap_input, event);
-                        // Don't validate on every keystroke, only when losing focus
+                    }
+                    ScreenAction::None
+                }
+            }
+        } else {
+            // Handle two-level navigation based on focus mode
+            match self.focus_mode {
+                FocusMode::PartitionList => {
+                    // Try back handler in partition list mode
+                    if let Some(action) = self.handle_back_input(key) {
+                        return action;
+                    }
+
+                    match key {
+                        KeyCode::Up => {
+                            self.select_previous_partition();
+                            ScreenAction::None
+                        }
+                        KeyCode::Down => {
+                            self.select_next_partition();
+                            ScreenAction::None
+                        }
+                        KeyCode::Enter => {
+                            // Enter edit mode for the selected partition
+                            self.enter_edit_mode();
+                            ScreenAction::None
+                        }
+                        KeyCode::Right => {
+                            // Continue to next screen (only in list mode)
+                            ScreenAction::Next
+                        }
+                        KeyCode::Tab => {
+                            // Quick access to swap size input (backward compatibility)
+                            self.swap_focused = true;
+                            self.swap_input.set_focused(true);
+                            ScreenAction::None
+                        }
+                        _ => ScreenAction::None,
                     }
                 }
-                ScreenAction::None
+                FocusMode::PartitionEdit => {
+                    match key {
+                        KeyCode::Up => {
+                            self.select_previous_field();
+                            ScreenAction::None
+                        }
+                        KeyCode::Down => {
+                            self.select_next_field();
+                            ScreenAction::None
+                        }
+                        KeyCode::Left => {
+                            // Cycle filesystem left (only if on FilesystemType field)
+                            self.cycle_filesystem(-1);
+                            ScreenAction::None
+                        }
+                        KeyCode::Right => {
+                            // Cycle filesystem right (only if on FilesystemType field)
+                            self.cycle_filesystem(1);
+                            ScreenAction::None
+                        }
+                        KeyCode::Enter => {
+                            if self.selected_field == Some(EditableField::Size) {
+                                // If on Size field, focus the input
+                                self.swap_focused = true;
+                                self.swap_input.set_focused(true);
+                                ScreenAction::None
+                            } else {
+                                // If on FilesystemType or any other field, exit edit mode
+                                self.exit_edit_mode();
+                                ScreenAction::None
+                            }
+                        }
+                        _ => ScreenAction::None,
+                    }
+                }
             }
         }
     }
@@ -501,46 +816,79 @@ impl Screen for PartitionPlanningScreen {
         vec![
             "# Partition Planning Screen".to_string(),
             "".to_string(),
-            "This screen shows the partition layout that will be created.".to_string(),
-            "You can adjust the swap partition size to suit your needs.".to_string(),
+            "This screen shows an interactive partition layout editor.".to_string(),
+            "You can customize partition sizes and filesystem types.".to_string(),
             "".to_string(),
-            "## UEFI Layout".to_string(),
+            "## Interactive Navigation".to_string(),
             "".to_string(),
-            "- EFI System Partition (512 MB, FAT32): Required for UEFI boot".to_string(),
-            "- Root Partition (remaining space, ext4): Main system files".to_string(),
-            "- Swap Partition (adjustable, default 8 GB): Virtual memory and hibernation".to_string(),
+            "The partition list uses a hierarchical menu with '>' cursor:".to_string(),
+            "- Navigate partitions with ↑↓ arrow keys".to_string(),
+            "- Press Enter on a partition to edit its properties".to_string(),
+            "- In edit mode, navigate fields with ↑↓".to_string(),
+            "- Press Escape to exit edit mode".to_string(),
             "".to_string(),
-            "## BIOS Layout".to_string(),
+            "## Default Layout".to_string(),
             "".to_string(),
-            "- Root Partition (remaining space, ext4): Main system files".to_string(),
-            "- Swap Partition (adjustable, default 8 GB): Virtual memory and hibernation".to_string(),
+            "UEFI Mode:".to_string(),
+            "- EFI System Partition (512 MB, FAT32) - fixed".to_string(),
+            "- Root Partition (remaining space) - filesystem editable".to_string(),
+            "- Swap Partition (8 GB default) - size editable".to_string(),
             "".to_string(),
-            "## Adjusting Partition Sizes".to_string(),
+            "BIOS Mode:".to_string(),
+            "- Root Partition (remaining space) - filesystem editable".to_string(),
+            "- Swap Partition (8 GB default) - size editable".to_string(),
             "".to_string(),
-            "You can adjust the swap partition size:".to_string(),
-            "- Use Tab to focus the swap size input field".to_string(),
-            "- Use ↑↓ arrow keys to adjust by 1 GB increments".to_string(),
-            "- Type directly to enter a specific size".to_string(),
-            "- Press Enter or Tab again to apply changes".to_string(),
+            "## Editing Partitions".to_string(),
             "".to_string(),
-            "The visual allocation bar shows how disk space is divided.".to_string(),
-            "Minimum swap size is 1 GB, maximum depends on disk size.".to_string(),
+            "Root Partition - Filesystem Type:".to_string(),
+            "1. Navigate to root partition and press Enter".to_string(),
+            "2. Use ←→ arrow keys to cycle through filesystem options:".to_string(),
+            "   • ext4 (recommended) - Reliable journaling filesystem".to_string(),
+            "   • btrfs - Modern CoW with snapshots and compression".to_string(),
+            "   • xfs - High-performance journaling filesystem".to_string(),
+            "   • zfs - Advanced filesystem with data integrity".to_string(),
+            "3. Press Enter to confirm or Escape to cancel".to_string(),
+            "".to_string(),
+            "Swap Partition - Size:".to_string(),
+            "1. Navigate to swap partition and press Enter".to_string(),
+            "2. Navigate to Size field with ↑↓".to_string(),
+            "3. Press Enter to type a specific size".to_string(),
+            "4. Or use Tab for quick access to swap size input".to_string(),
+            "   - Minimum: 1 GB, Maximum: disk size minus space for root".to_string(),
+            "".to_string(),
+            "## Visual Features".to_string(),
+            "".to_string(),
+            "- Disk allocation bar shows space distribution with colors".to_string(),
+            "- '>' cursor shows current selection".to_string(),
+            "- Bold cyan text indicates focused items".to_string(),
+            "- '◄' marker shows currently selected filesystem".to_string(),
+            "- '(fixed)' label indicates non-editable fields".to_string(),
             "".to_string(),
             "## Important Notes".to_string(),
             "".to_string(),
             "- All data on the selected disk will be PERMANENTLY ERASED".to_string(),
-            "- Partition sizes are optimized for typical installations".to_string(),
-            "- Root partition automatically adjusts when you change swap size".to_string(),
-            "- Root partition uses ext4 filesystem (reliable and well-tested)".to_string(),
+            "- Mount points are fixed for safety (ESP=/boot, Root=/, Swap=[swap])".to_string(),
+            "- ESP partition size is fixed at 512 MB (UEFI requirement)".to_string(),
+            "- Root partition adjusts automatically when swap size changes".to_string(),
             "".to_string(),
             "## Keyboard Shortcuts".to_string(),
             "".to_string(),
-            "- Tab: Focus/unfocus the swap size input field".to_string(),
-            "- ↑↓: Adjust swap size by 1 GB".to_string(),
-            "- Enter: Accept layout and continue".to_string(),
-            "- ← / Backspace: Go back to disk selection".to_string(),
+            "Partition List Mode:".to_string(),
+            "- ↑↓: Navigate between partitions".to_string(),
+            "- Enter: Edit selected partition".to_string(),
+            "- Tab: Quick access to swap size input".to_string(),
+            "- →: Continue to next screen".to_string(),
+            "".to_string(),
+            "Partition Edit Mode:".to_string(),
+            "- ↑↓: Navigate between fields".to_string(),
+            "- ←→: Change filesystem type (when on Type field)".to_string(),
+            "- Enter: Confirm selection and exit edit mode".to_string(),
+            "- Escape: Cancel changes and exit edit mode".to_string(),
+            "".to_string(),
+            "Always Available:".to_string(),
             "- ?: Toggle this help panel".to_string(),
-            "- q / Esc: Quit the installer".to_string(),
+            "- q: Quit the installer".to_string(),
+            "- ← / Backspace: Go back to disk selection".to_string(),
         ]
     }
 }
@@ -689,19 +1037,20 @@ mod tests {
     }
 
     #[test]
-    fn test_arrow_key_adjustment() {
+    fn test_arrow_key_navigation() {
         let mut screen = PartitionPlanningScreen::new();
         screen.set_disk(BootMode::Uefi, "/dev/sda".to_string(), 500_000_000_000);
 
-        assert_eq!(screen.swap_size_gb, 8);
+        // Up/Down arrows now navigate partitions, not adjust swap size
+        assert_eq!(screen.selected_partition_idx, 0);
 
-        // Test Up arrow
-        screen.handle_input(KeyCode::Up);
-        assert_eq!(screen.swap_size_gb, 9);
-
-        // Test Down arrow
+        // Test Down arrow - navigates to next partition
         screen.handle_input(KeyCode::Down);
-        assert_eq!(screen.swap_size_gb, 8);
+        assert_eq!(screen.selected_partition_idx, 1);
+
+        // Test Up arrow - navigates to previous partition
+        screen.handle_input(KeyCode::Up);
+        assert_eq!(screen.selected_partition_idx, 0);
     }
 
     #[test]
@@ -711,12 +1060,258 @@ mod tests {
 
         // When not focused, Enter should proceed
         let action = screen.handle_input(KeyCode::Enter);
-        assert_eq!(action, ScreenAction::Next);
+        assert_eq!(action, ScreenAction::None); // Now enters edit mode instead
 
         // When focused, Enter should unfocus
         screen.swap_focused = true;
         let action = screen.handle_input(KeyCode::Enter);
         assert_eq!(action, ScreenAction::None);
         assert!(!screen.swap_focused);
+    }
+
+    // ===== New tests for interactive partition editing =====
+
+    #[test]
+    fn test_initial_focus_mode() {
+        let screen = PartitionPlanningScreen::new();
+        assert_eq!(screen.focus_mode, FocusMode::PartitionList);
+        assert_eq!(screen.selected_partition_idx, 0);
+        assert_eq!(screen.selected_field, None);
+    }
+
+    #[test]
+    fn test_partition_navigation() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Uefi, "/dev/sda".to_string(), 500_000_000_000);
+
+        assert_eq!(screen.selected_partition_idx, 0);
+
+        // Navigate down
+        screen.handle_input(KeyCode::Down);
+        assert_eq!(screen.selected_partition_idx, 1);
+
+        screen.handle_input(KeyCode::Down);
+        assert_eq!(screen.selected_partition_idx, 2);
+
+        // Can't go past last partition
+        screen.handle_input(KeyCode::Down);
+        assert_eq!(screen.selected_partition_idx, 2);
+
+        // Navigate up
+        screen.handle_input(KeyCode::Up);
+        assert_eq!(screen.selected_partition_idx, 1);
+
+        screen.handle_input(KeyCode::Up);
+        assert_eq!(screen.selected_partition_idx, 0);
+
+        // Can't go before first partition
+        screen.handle_input(KeyCode::Up);
+        assert_eq!(screen.selected_partition_idx, 0);
+    }
+
+    #[test]
+    fn test_enter_edit_mode_on_root_partition() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Uefi, "/dev/sda".to_string(), 500_000_000_000);
+
+        // Navigate to root partition (index 1)
+        screen.selected_partition_idx = 1;
+
+        // Enter edit mode
+        screen.handle_input(KeyCode::Enter);
+
+        assert_eq!(screen.focus_mode, FocusMode::PartitionEdit);
+        assert_eq!(screen.selected_field, Some(EditableField::FilesystemType));
+    }
+
+    #[test]
+    fn test_enter_edit_mode_on_swap_partition() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Uefi, "/dev/sda".to_string(), 500_000_000_000);
+
+        // Navigate to swap partition (index 2)
+        screen.selected_partition_idx = 2;
+
+        // Enter edit mode
+        screen.handle_input(KeyCode::Enter);
+
+        assert_eq!(screen.focus_mode, FocusMode::PartitionEdit);
+        assert_eq!(screen.selected_field, Some(EditableField::Size));
+    }
+
+    #[test]
+    fn test_cannot_edit_esp_partition() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Uefi, "/dev/sda".to_string(), 500_000_000_000);
+
+        // ESP is at index 0
+        screen.selected_partition_idx = 0;
+
+        // Try to enter edit mode - should fail
+        screen.handle_input(KeyCode::Enter);
+
+        // Should still be in partition list mode
+        assert_eq!(screen.focus_mode, FocusMode::PartitionList);
+        assert_eq!(screen.selected_field, None);
+    }
+
+    #[test]
+    fn test_exit_edit_mode() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Uefi, "/dev/sda".to_string(), 500_000_000_000);
+
+        // Enter edit mode on root partition
+        screen.selected_partition_idx = 1;
+        screen.handle_input(KeyCode::Enter);
+        assert_eq!(screen.focus_mode, FocusMode::PartitionEdit);
+
+        // Exit edit mode with Escape
+        screen.handle_input(KeyCode::Esc);
+        assert_eq!(screen.focus_mode, FocusMode::PartitionList);
+        assert_eq!(screen.selected_field, None);
+    }
+
+    #[test]
+    fn test_filesystem_cycling() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Uefi, "/dev/sda".to_string(), 500_000_000_000);
+
+        // Enter edit mode on root partition
+        screen.selected_partition_idx = 1;
+        screen.handle_input(KeyCode::Enter);
+
+        // Default filesystem is ext4
+        assert_eq!(screen.partitions[1].fstype, "ext4");
+
+        // Cycle right to btrfs
+        screen.handle_input(KeyCode::Right);
+        assert_eq!(screen.partitions[1].fstype, "btrfs");
+
+        // Cycle right to xfs
+        screen.handle_input(KeyCode::Right);
+        assert_eq!(screen.partitions[1].fstype, "xfs");
+
+        // Cycle right to zfs
+        screen.handle_input(KeyCode::Right);
+        assert_eq!(screen.partitions[1].fstype, "zfs");
+
+        // Cycle right wraps back to ext4
+        screen.handle_input(KeyCode::Right);
+        assert_eq!(screen.partitions[1].fstype, "ext4");
+
+        // Cycle left to zfs
+        screen.handle_input(KeyCode::Left);
+        assert_eq!(screen.partitions[1].fstype, "zfs");
+    }
+
+    #[test]
+    fn test_get_editable_fields() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Uefi, "/dev/sda".to_string(), 500_000_000_000);
+
+        // ESP (index 0) - no editable fields
+        assert_eq!(screen.get_editable_fields(0).len(), 0);
+
+        // Root (index 1) - filesystem type editable
+        let root_fields = screen.get_editable_fields(1);
+        assert_eq!(root_fields.len(), 1);
+        assert_eq!(root_fields[0], EditableField::FilesystemType);
+
+        // Swap (index 2) - size editable
+        let swap_fields = screen.get_editable_fields(2);
+        assert_eq!(swap_fields.len(), 1);
+        assert_eq!(swap_fields[0], EditableField::Size);
+    }
+
+    #[test]
+    fn test_can_edit_partition() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Uefi, "/dev/sda".to_string(), 500_000_000_000);
+
+        // ESP cannot be edited
+        assert!(!screen.can_edit_partition(0));
+
+        // Root can be edited
+        assert!(screen.can_edit_partition(1));
+
+        // Swap can be edited
+        assert!(screen.can_edit_partition(2));
+    }
+
+    #[test]
+    fn test_right_arrow_continues_in_list_mode() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Uefi, "/dev/sda".to_string(), 500_000_000_000);
+
+        // In partition list mode, Right arrow should continue to next screen
+        let action = screen.handle_input(KeyCode::Right);
+        assert_eq!(action, ScreenAction::Next);
+    }
+
+    #[test]
+    fn test_tab_quick_access_to_swap() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Uefi, "/dev/sda".to_string(), 500_000_000_000);
+
+        // Tab should focus swap input
+        screen.handle_input(KeyCode::Tab);
+        assert!(screen.swap_focused);
+    }
+
+    #[test]
+    fn test_filesystem_persistence() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Uefi, "/dev/sda".to_string(), 500_000_000_000);
+
+        // Enter edit mode and change filesystem
+        screen.selected_partition_idx = 1;
+        screen.handle_input(KeyCode::Enter);
+        screen.handle_input(KeyCode::Right); // Change to btrfs
+        screen.handle_input(KeyCode::Esc); // Exit edit mode
+
+        // Filesystem change should persist
+        assert_eq!(screen.partitions[1].fstype, "btrfs");
+        assert_eq!(screen.focus_mode, FocusMode::PartitionList);
+    }
+
+    #[test]
+    fn test_bios_mode_no_esp() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Bios, "/dev/sda".to_string(), 500_000_000_000);
+
+        // BIOS mode should have only 2 partitions
+        assert_eq!(screen.partitions.len(), 2);
+
+        // Root should be at index 0
+        assert_eq!(screen.partitions[0].mountpoint, "/");
+        assert!(screen.can_edit_partition(0));
+
+        // Swap should be at index 1
+        assert_eq!(screen.partitions[1].fstype, "swap");
+        assert!(screen.can_edit_partition(1));
+    }
+
+    #[test]
+    fn test_enter_confirms_filesystem_selection() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Uefi, "/dev/sda".to_string(), 500_000_000_000);
+
+        // Enter edit mode on root partition
+        screen.selected_partition_idx = 1;
+        screen.handle_input(KeyCode::Enter);
+        assert_eq!(screen.focus_mode, FocusMode::PartitionEdit);
+        assert_eq!(screen.selected_field, Some(EditableField::FilesystemType));
+
+        // Change filesystem to btrfs
+        screen.handle_input(KeyCode::Right);
+        assert_eq!(screen.partitions[1].fstype, "btrfs");
+
+        // Press Enter to confirm and exit edit mode
+        screen.handle_input(KeyCode::Enter);
+        assert_eq!(screen.focus_mode, FocusMode::PartitionList);
+        assert_eq!(screen.selected_field, None);
+
+        // Filesystem change should be persisted
+        assert_eq!(screen.partitions[1].fstype, "btrfs");
     }
 }
