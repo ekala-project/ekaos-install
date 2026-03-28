@@ -17,6 +17,7 @@ use crate::nixos::{run_installation_async, InstallMessage, InstallProgress, Inst
 use crate::ui::{
     components::{Component, ProgressBar},
     theme::AppTheme,
+    utils::render_navigation_hints,
 };
 
 use super::{Screen, ScreenAction};
@@ -236,31 +237,42 @@ impl Screen for InstallationScreen {
         frame.render_widget(log_list, chunks[3]);
 
         // Status and navigation
-        let nav_text = if self.is_complete {
-            vec![Line::from(vec![
-                Span::styled("Enter", self.theme.shortcut()),
-                Span::raw(" Continue to completion screen"),
-            ])]
+        // Navigation hints
+        if self.is_complete {
+            render_navigation_hints(
+                frame,
+                &[("Enter", "Continue to completion screen")],
+                &self.theme,
+                chunks[4],
+            );
         } else if self.has_error {
-            vec![Line::from(vec![
-                Span::styled("q", self.theme.shortcut()),
-                Span::raw(" Exit | "),
-                Span::styled("↑↓", self.theme.shortcut()),
-                Span::raw(" Scroll log"),
-            ])]
+            render_navigation_hints(
+                frame,
+                &[("q", "Exit"), ("↑↓", "Scroll log")],
+                &self.theme,
+                chunks[4],
+            );
         } else {
-            vec![Line::from(vec![
+            // Show a plain message during installation
+            let nav_text = vec![Line::from(vec![
                 Span::raw("Installing... Please wait. "),
                 Span::styled("↑↓", self.theme.shortcut()),
                 Span::raw(" Scroll log"),
-            ])]
-        };
-
-        let nav_para = Paragraph::new(nav_text).alignment(ratatui::layout::Alignment::Center);
-        frame.render_widget(nav_para, chunks[4]);
+            ])];
+            let nav_para = Paragraph::new(nav_text).alignment(ratatui::layout::Alignment::Center);
+            frame.render_widget(nav_para, chunks[4]);
+        }
     }
 
     fn handle_input(&mut self, key: KeyCode) -> ScreenAction {
+        // Handle quit only when installation is complete or has error
+        if (self.has_error || self.is_complete) {
+            if let Some(action) = self.handle_standard_input(key) {
+                return action;
+            }
+        }
+
+        // Handle screen-specific keys
         match key {
             KeyCode::Enter if self.is_complete => ScreenAction::Next,
             KeyCode::Up => {
@@ -270,9 +282,6 @@ impl Screen for InstallationScreen {
             KeyCode::Down => {
                 self.scroll_down();
                 ScreenAction::None
-            }
-            KeyCode::Char('q') | KeyCode::Esc if self.has_error || self.is_complete => {
-                ScreenAction::Exit
             }
             _ => ScreenAction::None,
         }

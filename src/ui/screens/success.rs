@@ -11,7 +11,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::ui::theme::AppTheme;
+use crate::ui::{theme::AppTheme, utils::render_navigation_hints};
 
 use super::{Screen, ScreenAction};
 
@@ -147,18 +147,21 @@ impl Screen for SuccessScreen {
         frame.render_widget(next_steps_list, chunks[2]);
 
         // Navigation
-        let nav_text = vec![Line::from(vec![
-            Span::styled("Enter", self.theme.shortcut()),
-            Span::raw(" Reboot Now | "),
-            Span::styled("q", self.theme.shortcut()),
-            Span::raw(" Exit to shell"),
-        ])];
-
-        let nav_para = Paragraph::new(nav_text).alignment(ratatui::layout::Alignment::Center);
-        frame.render_widget(nav_para, chunks[4]);
+        render_navigation_hints(
+            frame,
+            &[("Enter", "Reboot Now"), ("q", "Exit to shell")],
+            &self.theme,
+            chunks[4],
+        );
     }
 
     fn handle_input(&mut self, key: KeyCode) -> ScreenAction {
+        // Try standard handlers first (quit, help - though help not shown on success)
+        if let Some(action) = self.handle_standard_input(key) {
+            return action;
+        }
+
+        // Handle screen-specific keys
         match key {
             KeyCode::Up => {
                 self.select_previous();
@@ -172,7 +175,6 @@ impl Screen for SuccessScreen {
                 // For now, just exit. In a real implementation, this would trigger a reboot
                 ScreenAction::Exit
             }
-            KeyCode::Char('q') | KeyCode::Esc => ScreenAction::Exit,
             _ => ScreenAction::None,
         }
     }

@@ -14,8 +14,9 @@ use tracing::debug;
 use crate::config::{BootLoader, InstallConfig};
 use crate::system::BootMode;
 use crate::ui::{
-    components::{Component, Focusable, InputEvent, InputField, Interactive},
+    components::{Component, Focusable, InputField, Interactive},
     theme::AppTheme,
+    utils::{keycode_to_input_event, render_navigation_hints},
 };
 
 use super::{Screen, ScreenAction};
@@ -228,24 +229,37 @@ impl Screen for ConfigurationScreen {
         }
 
         // Navigation hints
-        let nav_text = vec![Line::from(vec![
-            Span::styled("Tab", self.theme.shortcut()),
-            Span::raw(" Next field | "),
-            Span::styled("Shift+Tab", self.theme.shortcut()),
-            Span::raw(" Previous | "),
-            Span::styled("Enter", self.theme.shortcut()),
-            Span::raw(" Continue | "),
-            Span::styled("←", self.theme.shortcut()),
-            Span::raw(" Back | "),
-            Span::styled("q", self.theme.shortcut()),
-            Span::raw(" Quit"),
-        ])];
-
-        let nav_para = Paragraph::new(nav_text).alignment(ratatui::layout::Alignment::Center);
-        frame.render_widget(nav_para, chunks[8]);
+        render_navigation_hints(
+            frame,
+            &[
+                ("Tab", "Next field"),
+                ("Shift+Tab", "Previous"),
+                ("Enter", "Continue"),
+                ("←", "Back"),
+                ("q", "Quit"),
+            ],
+            &self.theme,
+            chunks[8],
+        );
     }
 
     fn handle_input(&mut self, key: KeyCode) -> ScreenAction {
+        // Try standard handlers first (quit, help), but only when not in an input field
+        if !self.hostname_input.is_focused()
+            && !self.username_input.is_focused()
+            && !self.password_input.is_focused()
+            && !self.password_confirm_input.is_focused()
+        {
+            if let Some(action) = self.handle_standard_input(key) {
+                return action;
+            }
+            // Try back handler (only when not in input fields)
+            if let Some(action) = self.handle_back_input(key) {
+                return action;
+            }
+        }
+
+        // Handle screen-specific keys
         match key {
             KeyCode::Tab => {
                 self.focus_next();
@@ -263,41 +277,22 @@ impl Screen for ConfigurationScreen {
                     ScreenAction::None
                 }
             }
-            KeyCode::Left | KeyCode::Backspace
-                if !self.hostname_input.is_focused()
-                    && !self.username_input.is_focused()
-                    && !self.password_input.is_focused()
-                    && !self.password_confirm_input.is_focused() =>
-            {
-                ScreenAction::Back
-            }
-            KeyCode::Char('q') | KeyCode::Esc => ScreenAction::Exit,
-            KeyCode::Char('?') => ScreenAction::ToggleHelp,
             _ => {
                 // Convert KeyCode to InputEvent and pass to focused field
-                let event = match key {
-                    KeyCode::Char(c) => InputEvent::Char(c),
-                    KeyCode::Backspace => InputEvent::Backspace,
-                    KeyCode::Delete => InputEvent::Delete,
-                    KeyCode::Left => InputEvent::Left,
-                    KeyCode::Right => InputEvent::Right,
-                    KeyCode::Home => InputEvent::Home,
-                    KeyCode::End => InputEvent::End,
-                    _ => return ScreenAction::None,
-                };
-
-                match self.focused_field {
-                    FocusedField::Hostname => {
-                        self.hostname_input.handle_input(event);
-                    }
-                    FocusedField::Username => {
-                        self.username_input.handle_input(event);
-                    }
-                    FocusedField::Password => {
-                        self.password_input.handle_input(event);
-                    }
-                    FocusedField::PasswordConfirm => {
-                        self.password_confirm_input.handle_input(event);
+                if let Some(event) = keycode_to_input_event(key) {
+                    match self.focused_field {
+                        FocusedField::Hostname => {
+                            self.hostname_input.handle_input(event);
+                        }
+                        FocusedField::Username => {
+                            self.username_input.handle_input(event);
+                        }
+                        FocusedField::Password => {
+                            self.password_input.handle_input(event);
+                        }
+                        FocusedField::PasswordConfirm => {
+                            self.password_confirm_input.handle_input(event);
+                        }
                     }
                 }
                 ScreenAction::None

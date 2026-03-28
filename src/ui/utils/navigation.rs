@@ -80,7 +80,7 @@ mod tests {
 
         terminal
             .draw(|frame| {
-                let area = frame.area();
+                let area = frame.size();
                 render_navigation_hints(
                     frame,
                     &[("Enter", "Continue"), ("q", "Quit")],
@@ -101,7 +101,7 @@ mod tests {
 
         terminal
             .draw(|frame| {
-                let area = frame.area();
+                let area = frame.size();
                 render_navigation_hints(frame, &[], &theme, area);
             })
             .unwrap();
@@ -117,7 +117,7 @@ mod tests {
 
         terminal
             .draw(|frame| {
-                let area = frame.area();
+                let area = frame.size();
                 render_navigation_hints(frame, &[("q", "Quit")], &theme, area);
             })
             .unwrap();

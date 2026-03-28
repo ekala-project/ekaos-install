@@ -172,7 +172,12 @@ fn detect_disks_real() -> Result<Vec<Disk>> {
     let disks = lsblk
         .blockdevices
         .into_iter()
-        .filter(|dev| dev.device_type == "disk")
+        .filter(|dev| {
+            // Only include real disk devices, exclude virtual/RAM devices
+            dev.device_type == "disk"
+                && !dev.name.starts_with("zram")
+                && !dev.name.starts_with("ram")
+        })
         .map(|dev| {
             let disk_type = classify_disk_type(&dev.name);
             let size_human = format_size_human(dev.size);
@@ -379,6 +384,14 @@ mod tests {
         if let Ok(disks) = detect_disks() {
             // Just verify we got a list (may be empty in some environments)
             assert!(disks.len() >= 0);
+
+            // Verify no zram or ram devices are included
+            for disk in &disks {
+                assert!(!disk.name.starts_with("zram"),
+                    "zram device should be filtered out: {}", disk.name);
+                assert!(!disk.name.starts_with("ram"),
+                    "ram device should be filtered out: {}", disk.name);
+            }
         }
     }
 

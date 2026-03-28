@@ -29,36 +29,28 @@ The installer guides you through 7 comprehensive screens:
 
 ## Completed Features (v0.1.0)
 
-✅ TUI skeleton with ratatui
-✅ CLI argument parsing with clap
-✅ Error handling framework
-✅ Mock mode for testing
-✅ VM testing infrastructure
-✅ Screen trait system
-✅ Component architecture
-✅ Input handling
-✅ Theme system
-✅ CPU detection
-✅ RAM detection
-✅ Architecture detection
-✅ Root privilege checking
-✅ NixOS environment validation
-✅ Disk detection and selection
-✅ Partition layout planning
-✅ Swap configuration
-✅ Disk information display
-✅ Hostname configuration
-✅ User account setup
-✅ Password validation
-✅ Timezone selection
-✅ Locale configuration
-✅ Desktop environment options
-✅ NixOS configuration generation
-✅ Hardware configuration generation
-✅ Asynchronous installation
-✅ Real-time progress tracking
-✅ Installation verification
-✅ Success screen with next steps
+- ✅ TUI skeleton
+- ✅ Error handling framework
+- ✅ Mock mode for testing
+- ✅ VM testing infrastructure
+- ✅ Screen trait system
+- ✅ Component architecture
+- ✅ Input handling
+- ✅ Theme system
+- ✅ CPU, architecture, RAM detection
+- ✅ Root privilege checking
+- ✅ NixOS environment validation
+- ✅ Disk detection and selection
+- ✅ Partition layout, swap, disk planning
+- ✅ Hostname, user, password configuration
+- ✅ Timezone and locale selection
+- ✅ Desktop environment options
+- ✅ NixOS configuration generation
+- ✅ Hardware configuration generation
+- ✅ Asynchronous installation
+- ✅ Real-time progress tracking
+- ✅ Installation verification
+- ✅ Success screen with next steps
 
 ## Installation
 
