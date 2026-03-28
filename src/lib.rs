@@ -8,11 +8,13 @@
 //! - `ui`: TUI components and screens
 //! - `system`: System command execution and validation
 //! - `nixos`: NixOS-specific operations (disk, partition, install)
+//! - `config`: Configuration data model and generation
 //! - `error`: Error types and handling
 
 #![warn(missing_docs, missing_debug_implementations, rust_2018_idioms)]
 
 pub mod app;
+pub mod config;
 pub mod error;
 pub mod nixos;
 pub mod system;

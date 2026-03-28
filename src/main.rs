@@ -16,8 +16,9 @@ use tracing::{info, warn};
 use ekaos_install::{
     app::{App, AppMode, Screen as AppScreen},
     ui::{
-        components::Component, render_footer, render_header, DiskSelectionScreen, HelpPanel,
-        Layout, PartitionPlanningScreen, Screen, ScreenAction, SystemInfoScreen, WelcomeScreen,
+        components::Component, render_footer, render_header, ConfigurationScreen,
+        DiskSelectionScreen, HelpPanel, Layout, PartitionPlanningScreen, Screen, ScreenAction,
+        SystemInfoScreen, WelcomeScreen,
     },
     APP_NAME, VERSION,
 };
@@ -107,6 +108,7 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
     let mut system_info_screen = SystemInfoScreen::new();
     let mut disk_selection_screen = DiskSelectionScreen::new();
     let mut partition_planning_screen = PartitionPlanningScreen::new();
+    let mut configuration_screen = ConfigurationScreen::new();
 
     // Call on_enter for initial screen
     welcome_screen.on_enter();
@@ -119,6 +121,7 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
         &mut system_info_screen,
         &mut disk_selection_screen,
         &mut partition_planning_screen,
+        &mut configuration_screen,
     );
 
     // Restore terminal
@@ -141,6 +144,7 @@ fn run_event_loop(
     system_info_screen: &mut SystemInfoScreen,
     disk_selection_screen: &mut DiskSelectionScreen,
     partition_planning_screen: &mut PartitionPlanningScreen,
+    configuration_screen: &mut ConfigurationScreen,
 ) -> Result<()> {
     let mut previous_screen = app.current_screen;
 
@@ -153,6 +157,7 @@ fn run_event_loop(
                 AppScreen::SystemInfo => system_info_screen.on_exit(),
                 AppScreen::DiskSelection => disk_selection_screen.on_exit(),
                 AppScreen::PartitionPlanning => partition_planning_screen.on_exit(),
+                AppScreen::Configuration => configuration_screen.on_exit(),
                 _ => {}
             }
 
@@ -170,6 +175,11 @@ fn run_event_loop(
                         );
                     }
                     partition_planning_screen.on_enter();
+                }
+                AppScreen::Configuration => {
+                    // Pass boot mode to configuration screen
+                    configuration_screen.set_boot_mode(system_info_screen.boot_mode);
+                    configuration_screen.on_enter();
                 }
                 _ => {}
             }
@@ -198,6 +208,7 @@ fn run_event_loop(
                 AppScreen::PartitionPlanning => {
                     partition_planning_screen.render(frame, content_area)
                 }
+                AppScreen::Configuration => configuration_screen.render(frame, content_area),
                 _ => {
                     // Placeholder for unimplemented screens
                     use ratatui::{
@@ -234,6 +245,7 @@ fn run_event_loop(
                     AppScreen::SystemInfo => system_info_screen.help_content(),
                     AppScreen::DiskSelection => disk_selection_screen.help_content(),
                     AppScreen::PartitionPlanning => partition_planning_screen.help_content(),
+                    AppScreen::Configuration => configuration_screen.help_content(),
                     _ => vec!["Help not available for this screen".to_string()],
                 };
 
@@ -276,6 +288,7 @@ fn run_event_loop(
                     AppScreen::PartitionPlanning => {
                         partition_planning_screen.handle_input(key.code)
                     }
+                    AppScreen::Configuration => configuration_screen.handle_input(key.code),
                     _ => {
                         // For unimplemented screens, allow basic navigation
                         match key.code {
@@ -298,6 +311,7 @@ fn run_event_loop(
                             AppScreen::PartitionPlanning => {
                                 partition_planning_screen.can_proceed()
                             }
+                            AppScreen::Configuration => configuration_screen.can_proceed(),
                             _ => true,
                         };
 

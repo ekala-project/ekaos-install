@@ -5,11 +5,13 @@
 use crossterm::event::KeyCode;
 use ratatui::{layout::Rect, Frame};
 
+pub mod configuration;
 pub mod disk_selection;
 pub mod partition_planning;
 pub mod system_info;
 pub mod welcome;
 
+pub use configuration::ConfigurationScreen;
 pub use disk_selection::DiskSelectionScreen;
 pub use partition_planning::PartitionPlanningScreen;
 pub use system_info::SystemInfoScreen;
