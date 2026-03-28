@@ -4,3 +4,30 @@ result-*
 
 # Ignore automatically generated direnv output
 .direnv
+
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Development
+*.log
+.env
+.env.local
+
+# Testing
+/test-output/
+*.profdata
+*.profraw
+
+# CI/CD
+.cache/

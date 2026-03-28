@@ -1,0 +1,52 @@
+[package]
+name = "ekaos-install"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+authors = ["Your Name <your.email@example.com>"]
+description = "A terminal user interface for guided NixOS installation"
+readme = "README.md"
+homepage = "https://github.com/yourusername/ekaos-install"
+repository = "https://github.com/yourusername/ekaos-install"
+license = "MIT OR Apache-2.0"
+keywords = ["nixos", "tui", "installer", "terminal"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+# TUI framework
+ratatui = "0.28"
+crossterm = { version = "0.28", features = ["event-stream"] }
+
+# CLI argument parsing
+clap = { version = "4.5", features = ["derive", "env", "wrap_help"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Utilities
+regex = "1.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = "3.10"
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
+codegen-units = 1
+
+[profile.dev]
+opt-level = 0
+
+[[bin]]
+name = "ekaos-install"
+path = "src/main.rs"
