@@ -173,7 +173,9 @@ impl Component for CheckboxList {
                 let checkbox = if item.checked { "[✓]" } else { "[ ]" };
 
                 let style = if is_focused {
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD)
                 } else if !item.enabled {
                     Style::default().fg(Color::DarkGray)
                 } else {

@@ -21,7 +21,7 @@ pub use checkbox::CheckboxList;
 pub use dialog::ConfirmDialog;
 pub use help::HelpPanel;
 pub use input::InputField;
-pub use message::{StatusMessage, MessageType};
+pub use message::{MessageType, StatusMessage};
 pub use progress::{ProgressBar, Spinner};
 pub use select::SelectList;
 

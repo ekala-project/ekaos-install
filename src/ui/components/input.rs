@@ -273,7 +273,9 @@ impl Component for InputField {
 
         // Create border style
         let border_style = if self.focused {
-            Style::default().fg(border_color).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(border_color)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(border_color)
         };
@@ -288,7 +290,9 @@ impl Component for InputField {
         let text_style = if !self.enabled {
             Style::default().fg(Color::DarkGray)
         } else if self.value.is_empty() && self.placeholder.is_some() {
-            Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC)
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::ITALIC)
         } else {
             Style::default().fg(Color::White)
         };

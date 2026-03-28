@@ -97,7 +97,10 @@ impl Component for HelpPanel {
                         ),
                     ])
                 } else {
-                    Line::from(Span::styled(line.as_str(), Style::default().fg(Color::White)))
+                    Line::from(Span::styled(
+                        line.as_str(),
+                        Style::default().fg(Color::White),
+                    ))
                 }
             })
             .collect();

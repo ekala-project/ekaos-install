@@ -53,10 +53,10 @@ impl Screen for SystemInfoScreen {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(5),  // Boot mode
-                Constraint::Length(8),  // System info
-                Constraint::Min(0),     // Spacer
-                Constraint::Length(3),  // Instructions
+                Constraint::Length(5), // Boot mode
+                Constraint::Length(8), // System info
+                Constraint::Min(0),    // Spacer
+                Constraint::Length(3), // Instructions
             ])
             .split(area);
 
@@ -128,8 +128,8 @@ impl Screen for SystemInfoScreen {
             ]),
         ];
 
-        let instructions_para = Paragraph::new(instructions)
-            .alignment(ratatui::layout::Alignment::Center);
+        let instructions_para =
+            Paragraph::new(instructions).alignment(ratatui::layout::Alignment::Center);
         frame.render_widget(instructions_para, chunks[3]);
     }
 
@@ -231,14 +231,8 @@ mod tests {
     fn test_screen_navigation() {
         let mut screen = SystemInfoScreen::new();
 
-        assert_eq!(
-            screen.handle_input(KeyCode::Enter),
-            ScreenAction::Next
-        );
-        assert_eq!(
-            screen.handle_input(KeyCode::Left),
-            ScreenAction::Back
-        );
+        assert_eq!(screen.handle_input(KeyCode::Enter), ScreenAction::Next);
+        assert_eq!(screen.handle_input(KeyCode::Left), ScreenAction::Back);
         assert_eq!(
             screen.handle_input(KeyCode::Char('?')),
             ScreenAction::ToggleHelp

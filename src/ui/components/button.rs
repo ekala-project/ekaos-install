@@ -106,11 +106,9 @@ impl Component for Button {
         };
 
         let block = if self.focused {
-            Block::default().borders(Borders::ALL).border_style(
-                Style::default()
-                    .fg(color)
-                    .add_modifier(Modifier::BOLD),
-            )
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(color).add_modifier(Modifier::BOLD))
         } else {
             Block::default().borders(Borders::ALL).border_style(
                 Style::default().fg(if self.enabled { color } else { Color::DarkGray }),

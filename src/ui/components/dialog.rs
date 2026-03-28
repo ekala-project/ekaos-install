@@ -141,11 +141,7 @@ impl Component for ConfirmDialog {
         // Main dialog block
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(
-                Style::default()
-                    .fg(color)
-                    .add_modifier(Modifier::BOLD),
-            )
+            .border_style(Style::default().fg(color).add_modifier(Modifier::BOLD))
             .title(self.title.as_str());
 
         frame.render_widget(block, popup_area);
@@ -170,10 +166,7 @@ impl Component for ConfirmDialog {
         // Render buttons
         let button_chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(50),
-                Constraint::Percentage(50),
-            ])
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
             .split(chunks[1]);
 
         // Yes button

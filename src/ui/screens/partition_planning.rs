@@ -168,11 +168,11 @@ impl Screen for PartitionPlanningScreen {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(5),  // Disk info
-                Constraint::Length(3),  // Instructions
-                Constraint::Min(10),    // Partition list
-                Constraint::Length(5),  // Summary
-                Constraint::Length(3),  // Navigation hints
+                Constraint::Length(5), // Disk info
+                Constraint::Length(3), // Instructions
+                Constraint::Min(10),   // Partition list
+                Constraint::Length(5), // Summary
+                Constraint::Length(3), // Navigation hints
             ])
             .split(area);
 
@@ -222,10 +222,7 @@ impl Screen for PartitionPlanningScreen {
                     Line::from(vec![
                         Span::styled(&part.label, self.theme.success_bold()),
                         Span::raw("  "),
-                        Span::styled(
-                            format!("[{}]", part.size_human()),
-                            self.theme.text_muted(),
-                        ),
+                        Span::styled(format!("[{}]", part.size_human()), self.theme.text_muted()),
                     ]),
                     Line::from(vec![
                         Span::raw("  "),

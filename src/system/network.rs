@@ -105,10 +105,7 @@ fn check_ping(host: &str, timeout_secs: u64) -> bool {
 /// Check if we can resolve DNS for a hostname
 fn check_dns_resolution(hostname: &str) -> bool {
     // Try using `getent hosts` which uses the system resolver
-    let output = Command::new("getent")
-        .arg("hosts")
-        .arg(hostname)
-        .output();
+    let output = Command::new("getent").arg("hosts").arg(hostname).output();
 
     match output {
         Ok(output) => output.status.success(),
@@ -163,9 +160,7 @@ mod tests {
 
     #[test]
     fn test_network_status_description() {
-        assert!(NetworkStatus::Connected
-            .description()
-            .contains("available"));
+        assert!(NetworkStatus::Connected.description().contains("available"));
         assert!(NetworkStatus::Disconnected
             .description()
             .contains("No network"));

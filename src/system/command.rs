@@ -152,7 +152,9 @@ impl Default for MockExecutor {
 
         executor.add_response(
             "ip link show",
-            CommandOutput::success("1: lo: <LOOPBACK,UP,LOWER_UP>\n2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP>"),
+            CommandOutput::success(
+                "1: lo: <LOOPBACK,UP,LOWER_UP>\n2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP>",
+            ),
         );
 
         executor.add_response(
@@ -224,8 +226,15 @@ impl CommandExecutor for MockExecutor {
         // In mock mode, all standard commands exist
         matches!(
             command,
-            "lsblk" | "parted" | "mkfs.ext4" | "mkfs.fat" | "mkswap" | "mount" | "umount"
-                | "nixos-generate-config" | "nixos-install"
+            "lsblk"
+                | "parted"
+                | "mkfs.ext4"
+                | "mkfs.fat"
+                | "mkswap"
+                | "mount"
+                | "umount"
+                | "nixos-generate-config"
+                | "nixos-install"
         )
     }
 }

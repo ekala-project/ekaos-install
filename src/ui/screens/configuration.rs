@@ -163,15 +163,15 @@ impl Screen for ConfigurationScreen {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Instructions
-                Constraint::Length(3),  // Hostname
-                Constraint::Length(3),  // Username
-                Constraint::Length(3),  // Password
-                Constraint::Length(3),  // Confirm password
-                Constraint::Length(5),  // Summary info
-                Constraint::Length(3),  // Error/status
-                Constraint::Min(0),     // Spacer
-                Constraint::Length(3),  // Navigation
+                Constraint::Length(3), // Instructions
+                Constraint::Length(3), // Hostname
+                Constraint::Length(3), // Username
+                Constraint::Length(3), // Password
+                Constraint::Length(3), // Confirm password
+                Constraint::Length(5), // Summary info
+                Constraint::Length(3), // Error/status
+                Constraint::Min(0),    // Spacer
+                Constraint::Length(3), // Navigation
             ])
             .split(area);
 

@@ -73,7 +73,9 @@ impl DiskSelectionScreen {
         let disk = self.selected_disk()?;
 
         if disk.readonly {
-            return Some("⚠ This disk is read-only and cannot be used for installation".to_string());
+            return Some(
+                "⚠ This disk is read-only and cannot be used for installation".to_string(),
+            );
         }
 
         if disk.removable {
@@ -106,10 +108,10 @@ impl Screen for DiskSelectionScreen {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Instructions
-                Constraint::Min(10),    // Disk list
-                Constraint::Length(5),  // Warning/info area
-                Constraint::Length(3),  // Navigation hints
+                Constraint::Length(3), // Instructions
+                Constraint::Min(10),   // Disk list
+                Constraint::Length(5), // Warning/info area
+                Constraint::Length(3), // Navigation hints
             ])
             .split(area);
 
@@ -173,11 +175,14 @@ impl Screen for DiskSelectionScreen {
 
                     let line = Line::from(vec![
                         Span::raw(prefix),
-                        Span::styled(status_icon, if is_installable {
-                            self.theme.success()
-                        } else {
-                            self.theme.error()
-                        }),
+                        Span::styled(
+                            status_icon,
+                            if is_installable {
+                                self.theme.success()
+                            } else {
+                                self.theme.error()
+                            },
+                        ),
                         Span::raw(" "),
                         Span::styled(disk.display_name(), style),
                         Span::raw(" "),

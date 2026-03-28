@@ -204,7 +204,10 @@ impl Screen for WelcomeScreen {
         match check_network() {
             Ok(status) => {
                 self.checks.network = status.is_connected();
-                debug!("Network check: {} (status: {:?})", self.checks.network, status);
+                debug!(
+                    "Network check: {} (status: {:?})",
+                    self.checks.network, status
+                );
             }
             Err(e) => {
                 warn!("Network check failed: {}", e);
@@ -264,11 +267,7 @@ impl Screen for WelcomeScreen {
 impl WelcomeScreen {
     /// Create a check status line
     fn check_line(&self, label: &str, passed: bool) -> Line<'static> {
-        let icon = if passed {
-            icons::SUCCESS
-        } else {
-            icons::ERROR
-        };
+        let icon = if passed { icons::SUCCESS } else { icons::ERROR };
 
         let style = if passed {
             self.theme.success()
@@ -312,16 +311,10 @@ mod tests {
         assert!(!screen.can_go_back());
 
         // Enter should proceed when checks pass
-        assert_eq!(
-            screen.handle_input(KeyCode::Enter),
-            ScreenAction::Next
-        );
+        assert_eq!(screen.handle_input(KeyCode::Enter), ScreenAction::Next);
 
         // q should exit
-        assert_eq!(
-            screen.handle_input(KeyCode::Char('q')),
-            ScreenAction::Exit
-        );
+        assert_eq!(screen.handle_input(KeyCode::Char('q')), ScreenAction::Exit);
     }
 
     #[test]

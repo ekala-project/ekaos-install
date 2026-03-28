@@ -262,8 +262,7 @@ fn run_event_loop(
         if event::poll(std::time::Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 // Handle Ctrl+C globally
-                if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL)
-                {
+                if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
                     app.exit();
                     continue;
                 }
@@ -308,9 +307,7 @@ fn run_event_loop(
                             AppScreen::Welcome => welcome_screen.can_proceed(),
                             AppScreen::SystemInfo => system_info_screen.can_proceed(),
                             AppScreen::DiskSelection => disk_selection_screen.can_proceed(),
-                            AppScreen::PartitionPlanning => {
-                                partition_planning_screen.can_proceed()
-                            }
+                            AppScreen::PartitionPlanning => partition_planning_screen.can_proceed(),
                             AppScreen::Configuration => configuration_screen.can_proceed(),
                             _ => true,
                         };

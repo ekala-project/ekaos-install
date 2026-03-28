@@ -166,8 +166,8 @@ fn detect_disks_real() -> Result<Vec<Disk>> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     debug!("lsblk output: {}", stdout);
 
-    let lsblk: LsblkOutput = serde_json::from_str(&stdout)
-        .context("Failed to parse lsblk JSON output")?;
+    let lsblk: LsblkOutput =
+        serde_json::from_str(&stdout).context("Failed to parse lsblk JSON output")?;
 
     let disks = lsblk
         .blockdevices

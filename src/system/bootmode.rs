@@ -82,8 +82,7 @@ fn detect_boot_mode_mock() -> BootMode {
 
 /// Check if we should use mock mode
 fn should_use_mock() -> bool {
-    std::env::var("EKAOS_MOCK").is_ok() ||
-    std::env::var("EKAOS_INSTALL_MOCK").is_ok()
+    std::env::var("EKAOS_MOCK").is_ok() || std::env::var("EKAOS_INSTALL_MOCK").is_ok()
 }
 
 #[cfg(test)]

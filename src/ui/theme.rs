@@ -107,9 +107,7 @@ impl AppTheme {
 
     /// Error message style (bold)
     pub fn error_bold(&self) -> Style {
-        Style::default()
-            .fg(self.error)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(self.error).add_modifier(Modifier::BOLD)
     }
 
     /// Info message style
@@ -119,9 +117,7 @@ impl AppTheme {
 
     /// Info message style (bold)
     pub fn info_bold(&self) -> Style {
-        Style::default()
-            .fg(self.info)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(self.info).add_modifier(Modifier::BOLD)
     }
 
     /// Normal border style
@@ -181,9 +177,7 @@ impl AppTheme {
 
     /// Danger button style (normal)
     pub fn button_danger(&self) -> Style {
-        Style::default()
-            .fg(self.error)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(self.error).add_modifier(Modifier::BOLD)
     }
 
     /// Selection indicator style

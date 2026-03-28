@@ -74,7 +74,10 @@ fn get_cpu_model() -> Result<String> {
 /// Get number of CPU cores from /proc/cpuinfo
 fn get_cpu_cores() -> Result<usize> {
     let cpuinfo = fs::read_to_string("/proc/cpuinfo")?;
-    let count = cpuinfo.lines().filter(|line| line.starts_with("processor")).count();
+    let count = cpuinfo
+        .lines()
+        .filter(|line| line.starts_with("processor"))
+        .count();
 
     Ok(count.max(1))
 }

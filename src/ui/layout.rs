@@ -91,7 +91,9 @@ pub fn render_footer(frame: &mut Frame<'_>, area: Rect, screen: Screen, is_mock:
     if screen.can_go_back() {
         hints.push(Span::styled(
             "← Back",
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         ));
         hints.push(Span::raw(" | "));
     }
@@ -99,14 +101,18 @@ pub fn render_footer(frame: &mut Frame<'_>, area: Rect, screen: Screen, is_mock:
     if screen.next().is_some() {
         hints.push(Span::styled(
             "↵ Next",
-            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
         ));
         hints.push(Span::raw(" | "));
     }
 
     hints.push(Span::styled(
         "? Help",
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
     ));
     hints.push(Span::raw(" | "));
     hints.push(Span::styled(
