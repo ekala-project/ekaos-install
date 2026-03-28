@@ -16,8 +16,8 @@ use tracing::{info, warn};
 use ekaos_install::{
     app::{App, AppMode, Screen as AppScreen},
     ui::{
-        components::Component, render_footer, render_header, HelpPanel, Layout, Screen,
-        ScreenAction, SystemInfoScreen, WelcomeScreen,
+        components::Component, render_footer, render_header, DiskSelectionScreen, HelpPanel,
+        Layout, Screen, ScreenAction, SystemInfoScreen, WelcomeScreen,
     },
     APP_NAME, VERSION,
 };
@@ -105,6 +105,7 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
     // Create screen instances
     let mut welcome_screen = WelcomeScreen::new(app.is_mock(), dry_run);
     let mut system_info_screen = SystemInfoScreen::new();
+    let mut disk_selection_screen = DiskSelectionScreen::new();
 
     // Call on_enter for initial screen
     welcome_screen.on_enter();
@@ -115,6 +116,7 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
         &mut app,
         &mut welcome_screen,
         &mut system_info_screen,
+        &mut disk_selection_screen,
     );
 
     // Restore terminal
@@ -135,6 +137,7 @@ fn run_event_loop(
     app: &mut App,
     welcome_screen: &mut WelcomeScreen,
     system_info_screen: &mut SystemInfoScreen,
+    disk_selection_screen: &mut DiskSelectionScreen,
 ) -> Result<()> {
     let mut previous_screen = app.current_screen;
 
@@ -145,12 +148,14 @@ fn run_event_loop(
             match previous_screen {
                 AppScreen::Welcome => welcome_screen.on_exit(),
                 AppScreen::SystemInfo => system_info_screen.on_exit(),
+                AppScreen::DiskSelection => disk_selection_screen.on_exit(),
                 _ => {}
             }
 
             match app.current_screen {
                 AppScreen::Welcome => welcome_screen.on_enter(),
                 AppScreen::SystemInfo => system_info_screen.on_enter(),
+                AppScreen::DiskSelection => disk_selection_screen.on_enter(),
                 _ => {}
             }
 
@@ -174,6 +179,7 @@ fn run_event_loop(
             match app.current_screen {
                 AppScreen::Welcome => welcome_screen.render(frame, content_area),
                 AppScreen::SystemInfo => system_info_screen.render(frame, content_area),
+                AppScreen::DiskSelection => disk_selection_screen.render(frame, content_area),
                 _ => {
                     // Placeholder for unimplemented screens
                     use ratatui::{
@@ -208,6 +214,7 @@ fn run_event_loop(
                 let help_content = match app.current_screen {
                     AppScreen::Welcome => welcome_screen.help_content(),
                     AppScreen::SystemInfo => system_info_screen.help_content(),
+                    AppScreen::DiskSelection => disk_selection_screen.help_content(),
                     _ => vec!["Help not available for this screen".to_string()],
                 };
 
@@ -246,6 +253,7 @@ fn run_event_loop(
                 let action = match app.current_screen {
                     AppScreen::Welcome => welcome_screen.handle_input(key.code),
                     AppScreen::SystemInfo => system_info_screen.handle_input(key.code),
+                    AppScreen::DiskSelection => disk_selection_screen.handle_input(key.code),
                     _ => {
                         // For unimplemented screens, allow basic navigation
                         match key.code {
@@ -264,6 +272,7 @@ fn run_event_loop(
                         let can_proceed = match app.current_screen {
                             AppScreen::Welcome => welcome_screen.can_proceed(),
                             AppScreen::SystemInfo => system_info_screen.can_proceed(),
+                            AppScreen::DiskSelection => disk_selection_screen.can_proceed(),
                             _ => true,
                         };
 

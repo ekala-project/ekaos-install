@@ -13,5 +13,5 @@ pub use components::{
     SelectList, StatusMessage,
 };
 pub use layout::{render_footer, render_header, Layout};
-pub use screens::{Screen, ScreenAction, SystemInfoScreen, WelcomeScreen};
+pub use screens::{DiskSelectionScreen, Screen, ScreenAction, SystemInfoScreen, WelcomeScreen};
 pub use theme::{icons, spacing, AppTheme};

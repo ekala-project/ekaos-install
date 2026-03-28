@@ -5,9 +5,11 @@
 use crossterm::event::KeyCode;
 use ratatui::{layout::Rect, Frame};
 
+pub mod disk_selection;
 pub mod system_info;
 pub mod welcome;
 
+pub use disk_selection::DiskSelectionScreen;
 pub use system_info::SystemInfoScreen;
 pub use welcome::WelcomeScreen;
 
