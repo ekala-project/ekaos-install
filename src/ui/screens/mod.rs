@@ -69,4 +69,73 @@ pub trait Screen {
     fn can_go_back(&self) -> bool {
         true
     }
+
+    /// Handle standard keyboard input (quit, help)
+    ///
+    /// This method provides default handling for common keys:
+    /// - `q` or `Esc`: Exit the application
+    /// - `?`: Toggle help panel
+    ///
+    /// Returns `Some(ScreenAction)` if the key was handled, or `None` if the
+    /// screen should handle it with custom logic.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// fn handle_input(&mut self, key: KeyCode) -> ScreenAction {
+    ///     // Try standard handlers first
+    ///     if let Some(action) = self.handle_standard_input(key) {
+    ///         return action;
+    ///     }
+    ///
+    ///     // Handle screen-specific keys
+    ///     match key {
+    ///         KeyCode::Enter => ScreenAction::Next,
+    ///         _ => ScreenAction::None,
+    ///     }
+    /// }
+    /// ```
+    fn handle_standard_input(&self, key: KeyCode) -> Option<ScreenAction> {
+        match key {
+            KeyCode::Char('q') | KeyCode::Esc => Some(ScreenAction::Exit),
+            KeyCode::Char('?') => Some(ScreenAction::ToggleHelp),
+            _ => None,
+        }
+    }
+
+    /// Handle back navigation input
+    ///
+    /// This method provides default handling for back navigation keys:
+    /// - `←` (Left arrow) or `Backspace`: Go back to previous screen
+    ///
+    /// The back action is only returned if `can_go_back()` returns true.
+    ///
+    /// Returns `Some(ScreenAction)` if the key was handled, or `None` if the
+    /// screen should handle it with custom logic.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// fn handle_input(&mut self, key: KeyCode) -> ScreenAction {
+    ///     if let Some(action) = self.handle_standard_input(key) {
+    ///         return action;
+    ///     }
+    ///     if let Some(action) = self.handle_back_input(key) {
+    ///         return action;
+    ///     }
+    ///
+    ///     // Handle other keys...
+    ///     ScreenAction::None
+    /// }
+    /// ```
+    fn handle_back_input(&self, key: KeyCode) -> Option<ScreenAction> {
+        if self.can_go_back() {
+            match key {
+                KeyCode::Left | KeyCode::Backspace => Some(ScreenAction::Back),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
 }

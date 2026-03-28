@@ -12,7 +12,7 @@ use ratatui::{
 use tracing::{debug, warn};
 
 use crate::nixos::{detect_disks, Disk};
-use crate::ui::theme::AppTheme;
+use crate::ui::{theme::AppTheme, utils::render_navigation_hints};
 
 use super::{Screen, ScreenAction};
 
@@ -242,37 +242,45 @@ impl Screen for DiskSelectionScreen {
 
         // Navigation hints
         let can_proceed = self.is_selection_installable();
-        let nav_text = if can_proceed {
-            vec![Line::from(vec![
-                Span::styled("↑↓", self.theme.shortcut()),
-                Span::raw(" Select | "),
-                Span::styled("Enter", self.theme.shortcut()),
-                Span::raw(" Continue | "),
-                Span::styled("←", self.theme.shortcut()),
-                Span::raw(" Back | "),
-                Span::styled("?", self.theme.shortcut()),
-                Span::raw(" Help | "),
-                Span::styled("q", self.theme.shortcut()),
-                Span::raw(" Quit"),
-            ])]
+        if can_proceed {
+            render_navigation_hints(
+                frame,
+                &[
+                    ("↑↓", "Select"),
+                    ("Enter", "Continue"),
+                    ("←", "Back"),
+                    ("?", "Help"),
+                    ("q", "Quit"),
+                ],
+                &self.theme,
+                chunks[3],
+            );
         } else {
-            vec![Line::from(vec![
-                Span::styled("↑↓", self.theme.shortcut()),
-                Span::raw(" Select | "),
-                Span::styled("←", self.theme.shortcut()),
-                Span::raw(" Back | "),
-                Span::styled("?", self.theme.shortcut()),
-                Span::raw(" Help | "),
-                Span::styled("q", self.theme.shortcut()),
-                Span::raw(" Quit"),
-            ])]
-        };
-
-        let nav_para = Paragraph::new(nav_text).alignment(ratatui::layout::Alignment::Center);
-        frame.render_widget(nav_para, chunks[3]);
+            render_navigation_hints(
+                frame,
+                &[
+                    ("↑↓", "Select"),
+                    ("←", "Back"),
+                    ("?", "Help"),
+                    ("q", "Quit"),
+                ],
+                &self.theme,
+                chunks[3],
+            );
+        }
     }
 
     fn handle_input(&mut self, key: KeyCode) -> ScreenAction {
+        // Try standard handlers first (quit, help)
+        if let Some(action) = self.handle_standard_input(key) {
+            return action;
+        }
+        // Try back handler
+        if let Some(action) = self.handle_back_input(key) {
+            return action;
+        }
+
+        // Handle screen-specific keys
         match key {
             KeyCode::Up => {
                 self.select_previous();
@@ -283,9 +291,6 @@ impl Screen for DiskSelectionScreen {
                 ScreenAction::None
             }
             KeyCode::Enter if self.is_selection_installable() => ScreenAction::Next,
-            KeyCode::Left | KeyCode::Backspace => ScreenAction::Back,
-            KeyCode::Char('q') | KeyCode::Esc => ScreenAction::Exit,
-            KeyCode::Char('?') => ScreenAction::ToggleHelp,
             _ => ScreenAction::None,
         }
     }

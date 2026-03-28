@@ -7,6 +7,7 @@ pub mod components;
 pub mod layout;
 pub mod screens;
 pub mod theme;
+pub mod utils;
 
 pub use components::{
     Button, CheckboxList, ConfirmDialog, HelpPanel, InputField, MessageType, ProgressBar,

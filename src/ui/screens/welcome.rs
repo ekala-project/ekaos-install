@@ -10,7 +10,7 @@ use ratatui::{
 use tracing::{debug, warn};
 
 use crate::system::{check_network, is_nixos, is_root};
-use crate::ui::{icons, theme::AppTheme};
+use crate::ui::{icons, theme::AppTheme, utils::render_navigation_hints};
 
 use super::{Screen, ScreenAction};
 
@@ -146,36 +146,35 @@ impl Screen for WelcomeScreen {
         frame.render_widget(checks_para, chunks[5]);
 
         // Instructions
-        let instructions = if self.all_checks_passed() {
-            vec![
-                Line::from(""),
-                Line::from(vec![
-                    Span::raw("Press "),
-                    Span::styled("Enter", self.theme.shortcut()),
-                    Span::raw(" to continue or "),
-                    Span::styled("q", self.theme.shortcut()),
-                    Span::raw(" to quit"),
-                ]),
-            ]
+        if self.all_checks_passed() {
+            render_navigation_hints(
+                frame,
+                &[("Enter", "Continue"), ("?", "Help"), ("q", "Quit")],
+                &self.theme,
+                chunks[7],
+            );
         } else {
-            vec![
+            let error_msg = vec![
                 Line::from(""),
                 Line::from(Span::styled(
                     "Please resolve the issues above before continuing",
                     self.theme.error(),
                 )),
-            ]
-        };
-
-        let instructions_para = Paragraph::new(instructions).alignment(Alignment::Center);
-        frame.render_widget(instructions_para, chunks[7]);
+            ];
+            let error_para = Paragraph::new(error_msg).alignment(Alignment::Center);
+            frame.render_widget(error_para, chunks[7]);
+        }
     }
 
     fn handle_input(&mut self, key: KeyCode) -> ScreenAction {
+        // Try standard handlers first (quit, help)
+        if let Some(action) = self.handle_standard_input(key) {
+            return action;
+        }
+
+        // Handle screen-specific keys
         match key {
             KeyCode::Enter if self.all_checks_passed() => ScreenAction::Next,
-            KeyCode::Char('q') | KeyCode::Esc => ScreenAction::Exit,
-            KeyCode::Char('?') => ScreenAction::ToggleHelp,
             _ => ScreenAction::None,
         }
     }
