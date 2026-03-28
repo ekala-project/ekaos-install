@@ -7,7 +7,9 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
 };
+use tracing::{debug, warn};
 
+use crate::system::{detect_boot_mode, detect_system, BootMode, SystemInfo};
 use crate::ui::theme::AppTheme;
 
 use super::{Screen, ScreenAction};
@@ -20,61 +22,6 @@ pub struct SystemInfoScreen {
     boot_mode: BootMode,
     /// System info data
     system_info: SystemInfo,
-}
-
-/// Boot mode (UEFI or BIOS)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BootMode {
-    /// UEFI boot mode
-    Uefi,
-    /// Legacy BIOS boot mode
-    Bios,
-    /// Unknown/not detected
-    Unknown,
-}
-
-impl BootMode {
-    /// Get display string
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            BootMode::Uefi => "UEFI",
-            BootMode::Bios => "Legacy BIOS",
-            BootMode::Unknown => "Unknown",
-        }
-    }
-
-    /// Get description
-    pub fn description(&self) -> &'static str {
-        match self {
-            BootMode::Uefi => "Modern boot mode with GPT partition table support",
-            BootMode::Bios => "Legacy boot mode with MBR partition table",
-            BootMode::Unknown => "Unable to determine boot mode",
-        }
-    }
-}
-
-/// System information
-#[derive(Debug, Clone)]
-struct SystemInfo {
-    /// CPU model
-    cpu: String,
-    /// Number of CPU cores
-    cores: usize,
-    /// Total RAM in GB
-    ram_gb: f64,
-    /// Architecture
-    arch: String,
-}
-
-impl Default for SystemInfo {
-    fn default() -> Self {
-        Self {
-            cpu: "Unknown CPU".to_string(),
-            cores: 1,
-            ram_gb: 0.0,
-            arch: "x86_64".to_string(),
-        }
-    }
 }
 
 impl SystemInfoScreen {
@@ -90,23 +37,6 @@ impl SystemInfoScreen {
     /// Set boot mode (for testing)
     pub fn with_boot_mode(mut self, boot_mode: BootMode) -> Self {
         self.boot_mode = boot_mode;
-        self
-    }
-
-    /// Set system info (for testing)
-    pub fn with_system_info(
-        mut self,
-        cpu: String,
-        cores: usize,
-        ram_gb: f64,
-        arch: String,
-    ) -> Self {
-        self.system_info = SystemInfo {
-            cpu,
-            cores,
-            ram_gb,
-            arch,
-        };
         self
     }
 }
@@ -161,11 +91,11 @@ impl Screen for SystemInfoScreen {
         let info_items = vec![
             ListItem::new(Line::from(vec![
                 Span::styled("CPU: ", self.theme.text_muted()),
-                Span::styled(&self.system_info.cpu, self.theme.text()),
+                Span::styled(&self.system_info.cpu_model, self.theme.text()),
             ])),
             ListItem::new(Line::from(vec![
                 Span::styled("Cores: ", self.theme.text_muted()),
-                Span::styled(self.system_info.cores.to_string(), self.theme.text()),
+                Span::styled(self.system_info.cpu_cores.to_string(), self.theme.text()),
             ])),
             ListItem::new(Line::from(vec![
                 Span::styled("RAM: ", self.theme.text_muted()),
@@ -176,7 +106,7 @@ impl Screen for SystemInfoScreen {
             ])),
             ListItem::new(Line::from(vec![
                 Span::styled("Architecture: ", self.theme.text_muted()),
-                Span::styled(&self.system_info.arch, self.theme.text()),
+                Span::styled(&self.system_info.architecture, self.theme.text()),
             ])),
         ];
 
@@ -214,15 +144,35 @@ impl Screen for SystemInfoScreen {
     }
 
     fn on_enter(&mut self) {
-        // TODO: Perform system detection here
-        // For now, use placeholder data
-        self.boot_mode = BootMode::Uefi; // Will be detected in Phase 2
-        self.system_info = SystemInfo {
-            cpu: "Simulated CPU".to_string(),
-            cores: 8,
-            ram_gb: 16.0,
-            arch: "x86_64".to_string(),
-        };
+        // Perform system detection
+        debug!("Detecting boot mode and system information");
+
+        // Detect boot mode
+        match detect_boot_mode() {
+            Ok(mode) => {
+                debug!("Detected boot mode: {:?}", mode);
+                self.boot_mode = mode;
+            }
+            Err(e) => {
+                warn!("Failed to detect boot mode: {}", e);
+                self.boot_mode = BootMode::Unknown;
+            }
+        }
+
+        // Detect system information
+        match detect_system() {
+            Ok(info) => {
+                debug!(
+                    "Detected system: {} ({} cores, {:.1} GB RAM, {})",
+                    info.cpu_model, info.cpu_cores, info.ram_gb, info.architecture
+                );
+                self.system_info = info;
+            }
+            Err(e) => {
+                warn!("Failed to detect system info: {}", e);
+                self.system_info = SystemInfo::default();
+            }
+        }
     }
 
     fn title(&self) -> &str {
@@ -299,6 +249,15 @@ mod tests {
     fn test_with_boot_mode() {
         let screen = SystemInfoScreen::new().with_boot_mode(BootMode::Uefi);
         assert_eq!(screen.boot_mode, BootMode::Uefi);
+    }
+
+    #[test]
+    fn test_on_enter_detection() {
+        // Test that on_enter runs detection without panicking
+        let mut screen = SystemInfoScreen::new();
+        screen.on_enter();
+        // In mock mode or real mode, should have detected something
+        assert!(screen.system_info.cpu_cores > 0);
     }
 
     #[test]

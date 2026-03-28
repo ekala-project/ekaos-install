@@ -7,8 +7,10 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
+use tracing::{debug, warn};
 
-use crate::ui::{icons, theme::AppTheme, StatusMessage};
+use crate::system::{check_network, is_nixos, is_root, NetworkStatus};
+use crate::ui::{icons, theme::AppTheme};
 
 use super::{Screen, ScreenAction};
 
@@ -188,6 +190,52 @@ impl Screen for WelcomeScreen {
 
     fn can_go_back(&self) -> bool {
         false // Can't go back from welcome screen
+    }
+
+    fn on_enter(&mut self) {
+        // Perform pre-flight checks
+        debug!("Running pre-flight checks");
+
+        // Check 1: Root access (or mock mode)
+        self.checks.root_access = self.is_mock || is_root();
+        debug!("Root access check: {}", self.checks.root_access);
+
+        // Check 2: Network connectivity
+        match check_network() {
+            Ok(status) => {
+                self.checks.network = status.is_connected();
+                debug!("Network check: {} (status: {:?})", self.checks.network, status);
+            }
+            Err(e) => {
+                warn!("Network check failed: {}", e);
+                self.checks.network = false;
+            }
+        }
+
+        // Check 3: Running on NixOS
+        match is_nixos() {
+            Ok(result) => {
+                self.checks.nixos_iso = result;
+                debug!("NixOS check: {}", self.checks.nixos_iso);
+            }
+            Err(e) => {
+                warn!("NixOS check failed: {}", e);
+                self.checks.nixos_iso = false;
+            }
+        }
+
+        // Check 4: Disk space (placeholder - will be implemented properly later)
+        // For now, assume true in mock mode or if we made it this far
+        self.checks.disk_space = true;
+        debug!("Disk space check: {}", self.checks.disk_space);
+
+        debug!(
+            "Pre-flight checks complete: root={}, network={}, nixos={}, disk={}",
+            self.checks.root_access,
+            self.checks.network,
+            self.checks.nixos_iso,
+            self.checks.disk_space
+        );
     }
 
     fn help_content(&self) -> Vec<String> {
