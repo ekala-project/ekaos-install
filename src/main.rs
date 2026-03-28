@@ -91,14 +91,52 @@ fn init_logging(verbose: bool) {
         .init();
 }
 
+/// RAII guard for terminal state - ensures cleanup on drop
+///
+/// This guard automatically restores the terminal to its original state
+/// when dropped, even in case of panics or early returns. This prevents
+/// leaving the terminal in a bad state (raw mode, alternate screen, etc.)
+struct TerminalGuard {
+    terminal: Terminal<CrosstermBackend<io::Stdout>>,
+}
+
+impl TerminalGuard {
+    /// Create a new terminal guard and setup the terminal
+    fn new() -> Result<Self> {
+        enable_raw_mode()?;
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        let backend = CrosstermBackend::new(stdout);
+        let terminal = Terminal::new(backend)?;
+
+        Ok(Self { terminal })
+    }
+
+    /// Get a mutable reference to the terminal
+    fn terminal_mut(&mut self) -> &mut Terminal<CrosstermBackend<io::Stdout>> {
+        &mut self.terminal
+    }
+}
+
+impl Drop for TerminalGuard {
+    /// Restore terminal state on drop - always runs, even on panic
+    fn drop(&mut self) {
+        // Ignore errors during cleanup to ensure all cleanup steps run
+        let _ = disable_raw_mode();
+        let _ = execute!(
+            self.terminal.backend_mut(),
+            LeaveAlternateScreen,
+            DisableMouseCapture
+        );
+        let _ = self.terminal.show_cursor();
+    }
+}
+
 /// Run the TUI application
 fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
-    // Setup terminal
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    // Setup terminal with RAII guard for automatic cleanup
+    let mut terminal_guard = TerminalGuard::new()?;
+    let terminal = terminal_guard.terminal_mut();
 
     // Create app state
     let mut app = App::new(mode, dry_run);
@@ -116,8 +154,8 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
     welcome_screen.on_enter();
 
     // Run the event loop
-    let result = run_event_loop(
-        &mut terminal,
+    run_event_loop(
+        terminal,
         &mut app,
         &mut welcome_screen,
         &mut system_info_screen,
@@ -126,18 +164,9 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
         &mut configuration_screen,
         &mut installation_screen,
         &mut success_screen,
-    );
-
-    // Restore terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    result
+    )
+    // Terminal is automatically cleaned up when terminal_guard goes out of scope
+    // This happens even if the event loop panics or returns an error
 }
 
 /// Main event loop
