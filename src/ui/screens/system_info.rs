@@ -19,7 +19,7 @@ pub struct SystemInfoScreen {
     /// Application theme
     theme: AppTheme,
     /// Detected boot mode
-    boot_mode: BootMode,
+    pub boot_mode: BootMode,
     /// System info data
     system_info: SystemInfo,
 }

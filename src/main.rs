@@ -17,7 +17,7 @@ use ekaos_install::{
     app::{App, AppMode, Screen as AppScreen},
     ui::{
         components::Component, render_footer, render_header, DiskSelectionScreen, HelpPanel,
-        Layout, Screen, ScreenAction, SystemInfoScreen, WelcomeScreen,
+        Layout, PartitionPlanningScreen, Screen, ScreenAction, SystemInfoScreen, WelcomeScreen,
     },
     APP_NAME, VERSION,
 };
@@ -106,6 +106,7 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
     let mut welcome_screen = WelcomeScreen::new(app.is_mock(), dry_run);
     let mut system_info_screen = SystemInfoScreen::new();
     let mut disk_selection_screen = DiskSelectionScreen::new();
+    let mut partition_planning_screen = PartitionPlanningScreen::new();
 
     // Call on_enter for initial screen
     welcome_screen.on_enter();
@@ -117,6 +118,7 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
         &mut welcome_screen,
         &mut system_info_screen,
         &mut disk_selection_screen,
+        &mut partition_planning_screen,
     );
 
     // Restore terminal
@@ -138,6 +140,7 @@ fn run_event_loop(
     welcome_screen: &mut WelcomeScreen,
     system_info_screen: &mut SystemInfoScreen,
     disk_selection_screen: &mut DiskSelectionScreen,
+    partition_planning_screen: &mut PartitionPlanningScreen,
 ) -> Result<()> {
     let mut previous_screen = app.current_screen;
 
@@ -149,6 +152,7 @@ fn run_event_loop(
                 AppScreen::Welcome => welcome_screen.on_exit(),
                 AppScreen::SystemInfo => system_info_screen.on_exit(),
                 AppScreen::DiskSelection => disk_selection_screen.on_exit(),
+                AppScreen::PartitionPlanning => partition_planning_screen.on_exit(),
                 _ => {}
             }
 
@@ -156,6 +160,17 @@ fn run_event_loop(
                 AppScreen::Welcome => welcome_screen.on_enter(),
                 AppScreen::SystemInfo => system_info_screen.on_enter(),
                 AppScreen::DiskSelection => disk_selection_screen.on_enter(),
+                AppScreen::PartitionPlanning => {
+                    // Pass disk info to partition planning screen
+                    if let Some(disk) = disk_selection_screen.selected_disk() {
+                        partition_planning_screen.set_disk(
+                            system_info_screen.boot_mode,
+                            disk.path.clone(),
+                            disk.size,
+                        );
+                    }
+                    partition_planning_screen.on_enter();
+                }
                 _ => {}
             }
 
@@ -180,6 +195,9 @@ fn run_event_loop(
                 AppScreen::Welcome => welcome_screen.render(frame, content_area),
                 AppScreen::SystemInfo => system_info_screen.render(frame, content_area),
                 AppScreen::DiskSelection => disk_selection_screen.render(frame, content_area),
+                AppScreen::PartitionPlanning => {
+                    partition_planning_screen.render(frame, content_area)
+                }
                 _ => {
                     // Placeholder for unimplemented screens
                     use ratatui::{
@@ -215,6 +233,7 @@ fn run_event_loop(
                     AppScreen::Welcome => welcome_screen.help_content(),
                     AppScreen::SystemInfo => system_info_screen.help_content(),
                     AppScreen::DiskSelection => disk_selection_screen.help_content(),
+                    AppScreen::PartitionPlanning => partition_planning_screen.help_content(),
                     _ => vec!["Help not available for this screen".to_string()],
                 };
 
@@ -254,6 +273,9 @@ fn run_event_loop(
                     AppScreen::Welcome => welcome_screen.handle_input(key.code),
                     AppScreen::SystemInfo => system_info_screen.handle_input(key.code),
                     AppScreen::DiskSelection => disk_selection_screen.handle_input(key.code),
+                    AppScreen::PartitionPlanning => {
+                        partition_planning_screen.handle_input(key.code)
+                    }
                     _ => {
                         // For unimplemented screens, allow basic navigation
                         match key.code {
@@ -273,6 +295,9 @@ fn run_event_loop(
                             AppScreen::Welcome => welcome_screen.can_proceed(),
                             AppScreen::SystemInfo => system_info_screen.can_proceed(),
                             AppScreen::DiskSelection => disk_selection_screen.can_proceed(),
+                            AppScreen::PartitionPlanning => {
+                                partition_planning_screen.can_proceed()
+                            }
                             _ => true,
                         };
 
