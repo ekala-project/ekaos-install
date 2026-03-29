@@ -10,7 +10,12 @@ use ratatui::{
 use tracing::{debug, warn};
 
 use crate::system::{check_network, detect_boot_mode, is_nixos, is_root, BootMode};
-use crate::ui::{icons, theme::AppTheme, utils::render_navigation_hints};
+use crate::ui::{
+    components::{Button, Component, Focusable},
+    icons,
+    theme::AppTheme,
+    utils::render_navigation_hints,
+};
 
 use super::{Screen, ScreenAction};
 
@@ -26,6 +31,8 @@ pub struct WelcomeScreen {
     checks: PreFlightChecks,
     /// Detected boot mode (public - needed by later screens)
     pub boot_mode: BootMode,
+    /// Continue button
+    continue_button: Button,
 }
 
 /// Pre-flight check results
@@ -55,12 +62,15 @@ impl Default for PreFlightChecks {
 impl WelcomeScreen {
     /// Create a new welcome screen
     pub fn new(is_mock: bool, is_dry_run: bool) -> Self {
+        let continue_button = Button::new("Continue");
+
         Self {
             theme: AppTheme::new(),
             is_mock,
             is_dry_run,
             checks: PreFlightChecks::default(),
             boot_mode: BootMode::Unknown,
+            continue_button,
         }
     }
 
@@ -86,8 +96,9 @@ impl Screen for WelcomeScreen {
                 Constraint::Length(2),  // Spacer/Mode indicators
                 Constraint::Length(10), // Pre-flight checks
                 Constraint::Length(5),  // Boot mode
+                Constraint::Length(3),  // Continue button
                 Constraint::Min(0),     // Spacer
-                Constraint::Length(3),  // Instructions
+                Constraint::Length(3),  // Navigation hints
             ])
             .split(area);
 
@@ -171,15 +182,19 @@ impl Screen for WelcomeScreen {
             .style(self.theme.text());
         frame.render_widget(boot_mode_para, chunks[6]);
 
-        // Instructions
-        if self.all_checks_passed() {
-            render_navigation_hints(
-                frame,
-                &[("Enter", "Continue"), ("?", "Help"), ("q", "Quit")],
-                &self.theme,
-                chunks[8],
-            );
-        } else {
+        // Continue button
+        self.continue_button.render(frame, chunks[7]);
+
+        // Navigation hints
+        render_navigation_hints(
+            frame,
+            &[("Enter", "Submit from button"), ("?", "Help"), ("q", "Quit")],
+            &self.theme,
+            chunks[9],
+        );
+
+        // Error message if checks failed (overlay on spacer area)
+        if !self.all_checks_passed() {
             let error_msg = vec![
                 Line::from(""),
                 Line::from(Span::styled(
@@ -200,7 +215,14 @@ impl Screen for WelcomeScreen {
 
         // Handle screen-specific keys
         match key {
-            KeyCode::Enter if self.all_checks_passed() => ScreenAction::Next,
+            KeyCode::Enter => {
+                // Only advance when button is focused and checks pass
+                if self.continue_button.is_focused() && self.all_checks_passed() {
+                    ScreenAction::Next
+                } else {
+                    ScreenAction::None
+                }
+            }
             _ => ScreenAction::None,
         }
     }
@@ -276,6 +298,9 @@ impl Screen for WelcomeScreen {
                 self.boot_mode = BootMode::Unknown;
             }
         }
+
+        // Set button as focused
+        self.continue_button.set_focused(true);
     }
 
     fn help_content(&self) -> Vec<String> {
@@ -304,9 +329,14 @@ impl Screen for WelcomeScreen {
             "".to_string(),
             "# Keyboard Shortcuts".to_string(),
             "".to_string(),
-            "- Enter: Continue to disk selection (when checks pass)".to_string(),
+            "- Enter: Press Continue button (when checks pass)".to_string(),
             "- ?: Toggle this help panel".to_string(),
             "- q/Esc: Quit the installer".to_string(),
+            "".to_string(),
+            "# How to Continue".to_string(),
+            "".to_string(),
+            "Once all pre-flight checks pass, the Continue button will be enabled".to_string(),
+            "Press Enter to proceed to disk selection.".to_string(),
         ]
     }
 }

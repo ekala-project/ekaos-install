@@ -9,12 +9,14 @@
 //! - `system`: System command execution and validation
 //! - `nixos`: NixOS-specific operations (disk, partition, install)
 //! - `config`: Configuration data model and generation
+//! - `data`: Static data (timezones, etc.)
 //! - `error`: Error types and handling
 
 #![warn(missing_docs, missing_debug_implementations, rust_2018_idioms)]
 
 pub mod app;
 pub mod config;
+pub mod data;
 pub mod error;
 pub mod nixos;
 pub mod system;

@@ -12,9 +12,10 @@ use ratatui::{
 use tracing::debug;
 
 use crate::config::{BootLoader, InstallConfig};
+use crate::data::timezones::get_timezone_list;
 use crate::system::BootMode;
 use crate::ui::{
-    components::{Component, Focusable, InputField, Interactive},
+    components::{Button, Component, Focusable, FilterableSelectList, InputField, Interactive},
     theme::AppTheme,
     utils::{keycode_to_input_event, render_navigation_hints},
 };
@@ -32,6 +33,8 @@ pub struct ConfigurationScreen {
     username_input: InputField,
     password_input: InputField,
     password_confirm_input: InputField,
+    timezone_selector: FilterableSelectList<String>,
+    continue_button: Button,
     /// Currently focused field
     focused_field: FocusedField,
     /// Validation error message
@@ -44,6 +47,8 @@ enum FocusedField {
     Username,
     Password,
     PasswordConfirm,
+    Timezone,
+    ContinueButton,
 }
 
 impl ConfigurationScreen {
@@ -57,6 +62,19 @@ impl ConfigurationScreen {
         let password_input = InputField::new("Password").password();
         let password_confirm_input = InputField::new("Confirm Password").password();
 
+        // Create timezone selector with all available timezones
+        let timezones = get_timezone_list();
+        let timezone_items: Vec<(String, String)> = timezones
+            .into_iter()
+            .map(|tz| (tz.clone(), tz))
+            .collect();
+        let mut timezone_selector = FilterableSelectList::new("Timezone")
+            .with_items(timezone_items);
+        // Set default to America/New_York
+        timezone_selector.set_selected_by_label("America/New_York");
+
+        let continue_button = Button::new("Continue");
+
         Self {
             theme: AppTheme::new(),
             config: InstallConfig::default(),
@@ -64,6 +82,8 @@ impl ConfigurationScreen {
             username_input,
             password_input,
             password_confirm_input,
+            timezone_selector,
+            continue_button,
             focused_field: FocusedField::Hostname,
             error_message: None,
         }
@@ -104,7 +124,9 @@ impl ConfigurationScreen {
             FocusedField::Hostname => FocusedField::Username,
             FocusedField::Username => FocusedField::Password,
             FocusedField::Password => FocusedField::PasswordConfirm,
-            FocusedField::PasswordConfirm => FocusedField::Hostname,
+            FocusedField::PasswordConfirm => FocusedField::Timezone,
+            FocusedField::Timezone => FocusedField::ContinueButton,
+            FocusedField::ContinueButton => FocusedField::Hostname,
         };
         self.set_focus();
     }
@@ -113,10 +135,12 @@ impl ConfigurationScreen {
     fn focus_previous(&mut self) {
         self.clear_focus();
         self.focused_field = match self.focused_field {
-            FocusedField::Hostname => FocusedField::PasswordConfirm,
+            FocusedField::Hostname => FocusedField::ContinueButton,
             FocusedField::Username => FocusedField::Hostname,
             FocusedField::Password => FocusedField::Username,
             FocusedField::PasswordConfirm => FocusedField::Password,
+            FocusedField::Timezone => FocusedField::PasswordConfirm,
+            FocusedField::ContinueButton => FocusedField::Timezone,
         };
         self.set_focus();
     }
@@ -127,6 +151,8 @@ impl ConfigurationScreen {
         self.username_input.set_focused(false);
         self.password_input.set_focused(false);
         self.password_confirm_input.set_focused(false);
+        self.timezone_selector.set_focused(false);
+        self.continue_button.set_focused(false);
     }
 
     /// Set focus on current field
@@ -136,6 +162,8 @@ impl ConfigurationScreen {
             FocusedField::Username => self.username_input.set_focused(true),
             FocusedField::Password => self.password_input.set_focused(true),
             FocusedField::PasswordConfirm => self.password_confirm_input.set_focused(true),
+            FocusedField::Timezone => self.timezone_selector.set_focused(true),
+            FocusedField::ContinueButton => self.continue_button.set_focused(true),
         }
     }
 
@@ -144,6 +172,9 @@ impl ConfigurationScreen {
         self.config.hostname = self.hostname_input.value().to_string();
         self.config.user.username = self.username_input.value().to_string();
         self.config.user.password = self.password_input.value().to_string();
+        if let Some(timezone) = self.timezone_selector.selected_value() {
+            self.config.timezone = timezone.clone();
+        }
     }
 
     /// Validate all inputs
@@ -178,15 +209,17 @@ impl Screen for ConfigurationScreen {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Instructions
-                Constraint::Length(3), // Hostname
-                Constraint::Length(3), // Username
-                Constraint::Length(3), // Password
-                Constraint::Length(3), // Confirm password
-                Constraint::Length(8), // Summary info (increased for disk info)
-                Constraint::Length(3), // Error/status
-                Constraint::Min(0),    // Spacer
-                Constraint::Length(3), // Navigation
+                Constraint::Length(3),  // Instructions
+                Constraint::Length(3),  // Hostname
+                Constraint::Length(3),  // Username
+                Constraint::Length(3),  // Password
+                Constraint::Length(3),  // Confirm password
+                Constraint::Length(10), // Timezone selector
+                Constraint::Length(3),  // Continue button
+                Constraint::Length(6),  // Summary info (reduced)
+                Constraint::Length(3),  // Error/status
+                Constraint::Min(0),     // Spacer
+                Constraint::Length(3),  // Navigation
             ])
             .split(area);
 
@@ -204,6 +237,10 @@ impl Screen for ConfigurationScreen {
         self.username_input.render(frame, chunks[2]);
         self.password_input.render(frame, chunks[3]);
         self.password_confirm_input.render(frame, chunks[4]);
+        self.timezone_selector.render(frame, chunks[5]);
+
+        // Continue button
+        self.continue_button.render(frame, chunks[6]);
 
         // Summary info
         let summary_block = Block::default()
@@ -236,18 +273,10 @@ impl Screen for ConfigurationScreen {
                 Span::styled("Bootloader: ", self.theme.text_muted()),
                 Span::styled(self.config.bootloader.as_str(), self.theme.text()),
             ]),
-            Line::from(vec![
-                Span::styled("Timezone: ", self.theme.text_muted()),
-                Span::styled(&self.config.timezone, self.theme.text()),
-            ]),
-            Line::from(vec![
-                Span::styled("Locale: ", self.theme.text_muted()),
-                Span::styled(&self.config.locale, self.theme.text()),
-            ]),
         ];
 
         let summary_para = Paragraph::new(summary_lines).block(summary_block);
-        frame.render_widget(summary_para, chunks[5]);
+        frame.render_widget(summary_para, chunks[7]);
 
         // Error message or status
         if let Some(ref error) = self.error_message {
@@ -259,21 +288,20 @@ impl Screen for ConfigurationScreen {
                 .block(error_block)
                 .style(self.theme.error())
                 .alignment(ratatui::layout::Alignment::Center);
-            frame.render_widget(error_para, chunks[6]);
+            frame.render_widget(error_para, chunks[8]);
         }
 
         // Navigation hints
         render_navigation_hints(
             frame,
             &[
-                ("↑↓", "Navigate fields"),
-                ("Tab", "Next"),
-                ("Enter", "Continue"),
-                ("←", "Back"),
-                ("q", "Quit"),
+                ("↑↓←→", "Navigate fields"),
+                ("Tab", "Next field"),
+                ("Enter", "Next / Submit"),
+                ("Esc", "Back / Quit"),
             ],
             &self.theme,
-            chunks[8],
+            chunks[10],
         );
     }
 
@@ -283,6 +311,7 @@ impl Screen for ConfigurationScreen {
             && !self.username_input.is_focused()
             && !self.password_input.is_focused()
             && !self.password_confirm_input.is_focused()
+            && !self.timezone_selector.is_focused()
         {
             if let Some(action) = self.handle_standard_input(key) {
                 return action;
@@ -303,20 +332,43 @@ impl Screen for ConfigurationScreen {
                 self.focus_previous();
                 ScreenAction::None
             }
-            KeyCode::Down => {
+            KeyCode::Left => {
+                // Left arrow always goes to previous field
+                self.focus_previous();
+                ScreenAction::None
+            }
+            KeyCode::Right => {
+                // Right arrow always goes to next field
                 self.focus_next();
                 ScreenAction::None
             }
-            KeyCode::Up => {
+            KeyCode::Down if !self.timezone_selector.is_focused() => {
+                // Only use Down for navigation if not in timezone selector
+                self.focus_next();
+                ScreenAction::None
+            }
+            KeyCode::Up if !self.timezone_selector.is_focused() => {
+                // Only use Up for navigation if not in timezone selector
                 self.focus_previous();
                 ScreenAction::None
             }
             KeyCode::Enter => {
-                if self.validate() {
-                    debug!("Configuration validated successfully");
-                    ScreenAction::Next
-                } else {
-                    ScreenAction::None
+                // Enter behavior depends on which field is focused
+                match self.focused_field {
+                    FocusedField::ContinueButton => {
+                        // Only submit when Continue button is focused
+                        if self.validate() {
+                            debug!("Configuration validated successfully");
+                            ScreenAction::Next
+                        } else {
+                            ScreenAction::None
+                        }
+                    }
+                    _ => {
+                        // For all other fields, Enter moves to next field
+                        self.focus_next();
+                        ScreenAction::None
+                    }
                 }
             }
             _ => {
@@ -334,6 +386,14 @@ impl Screen for ConfigurationScreen {
                         }
                         FocusedField::PasswordConfirm => {
                             self.password_confirm_input.handle_input(event);
+                        }
+                        FocusedField::Timezone => {
+                            self.timezone_selector.handle_input(event);
+                            // Update config in real-time
+                            self.update_config();
+                        }
+                        FocusedField::ContinueButton => {
+                            // Button doesn't need other input handling
                         }
                     }
                 }
@@ -369,21 +429,33 @@ impl Screen for ConfigurationScreen {
             "".to_string(),
             "## Additional Settings".to_string(),
             "".to_string(),
+            "- Timezone: Select your timezone from ~250 options".to_string(),
+            "  - Type to filter timezones (e.g., 'york', 'tokyo', 'london')".to_string(),
+            "  - Use ↑↓ to navigate filtered results".to_string(),
+            "  - Press Esc to clear filter".to_string(),
+            "  - Default: America/New_York".to_string(),
+            "".to_string(),
             "- Bootloader: Automatically selected based on boot mode".to_string(),
             "  - UEFI systems use systemd-boot".to_string(),
             "  - BIOS systems use GRUB".to_string(),
             "".to_string(),
-            "- Timezone: America/New_York (default)".to_string(),
             "- Locale: en_US.UTF-8 (default)".to_string(),
             "".to_string(),
             "## Keyboard Shortcuts".to_string(),
             "".to_string(),
-            "- ↑↓: Navigate between fields".to_string(),
+            "- ↑↓: Navigate between fields (or within timezone list)".to_string(),
+            "- ←→: Navigate to previous/next field (works everywhere)".to_string(),
             "- Tab / Shift+Tab: Also navigate fields".to_string(),
-            "- Enter: Validate and continue".to_string(),
+            "- Enter: Move to next field (or submit from Continue button)".to_string(),
             "- ← / Backspace: Go back (when not in a text field)".to_string(),
             "- ?: Toggle this help panel".to_string(),
             "- q / Esc: Quit the installer".to_string(),
+            "".to_string(),
+            "## Navigation Flow".to_string(),
+            "".to_string(),
+            "- Fill out all fields using Tab or Enter to move between them".to_string(),
+            "- When you reach the Continue button, press Enter to submit".to_string(),
+            "- The form will validate and proceed to the confirmation screen".to_string(),
         ]
     }
 
