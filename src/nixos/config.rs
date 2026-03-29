@@ -166,6 +166,10 @@ mod tests {
             keymap: "us".to_string(),
             bootloader: BootLoader::SystemdBoot,
             network_manager: true,
+            disk_path: "/dev/sda".to_string(),
+            disk_size: 500_000_000_000,
+            swap_size_gb: 8,
+            root_filesystem: "ext4".to_string(),
         }
     }
 

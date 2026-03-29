@@ -78,6 +78,20 @@ impl ConfigurationScreen {
         };
     }
 
+    /// Set disk and partition configuration from partition planning screen
+    pub fn set_disk_config(
+        &mut self,
+        disk_path: String,
+        disk_size: u64,
+        swap_size_gb: u64,
+        root_filesystem: String,
+    ) {
+        self.config.disk_path = disk_path;
+        self.config.disk_size = disk_size;
+        self.config.swap_size_gb = swap_size_gb;
+        self.config.root_filesystem = root_filesystem;
+    }
+
     /// Get the current configuration
     pub fn get_config(&self) -> &InstallConfig {
         &self.config
@@ -169,7 +183,7 @@ impl Screen for ConfigurationScreen {
                 Constraint::Length(3), // Username
                 Constraint::Length(3), // Password
                 Constraint::Length(3), // Confirm password
-                Constraint::Length(5), // Summary info
+                Constraint::Length(8), // Summary info (increased for disk info)
                 Constraint::Length(3), // Error/status
                 Constraint::Min(0),    // Spacer
                 Constraint::Length(3), // Navigation
@@ -197,7 +211,27 @@ impl Screen for ConfigurationScreen {
             .title(" Additional Settings ")
             .border_style(self.theme.border_style());
 
+        // Format disk size in human-readable format
+        let disk_size_human = if self.config.disk_size > 0 {
+            format!("{:.1} GB", self.config.disk_size as f64 / 1_000_000_000.0)
+        } else {
+            "Not set".to_string()
+        };
+
         let summary_lines = vec![
+            Line::from(vec![
+                Span::styled("Disk: ", self.theme.text_muted()),
+                Span::styled(&self.config.disk_path, self.theme.text()),
+                Span::styled(format!(" ({})", disk_size_human), self.theme.text_muted()),
+            ]),
+            Line::from(vec![
+                Span::styled("Swap: ", self.theme.text_muted()),
+                Span::styled(format!("{} GB", self.config.swap_size_gb), self.theme.text()),
+            ]),
+            Line::from(vec![
+                Span::styled("Root FS: ", self.theme.text_muted()),
+                Span::styled(&self.config.root_filesystem, self.theme.text()),
+            ]),
             Line::from(vec![
                 Span::styled("Bootloader: ", self.theme.text_muted()),
                 Span::styled(self.config.bootloader.as_str(), self.theme.text()),
@@ -431,5 +465,30 @@ mod tests {
 
         screen.handle_input(KeyCode::Up);
         assert_eq!(screen.focused_field, FocusedField::Hostname);
+    }
+
+    #[test]
+    fn test_set_disk_config() {
+        let mut screen = ConfigurationScreen::new();
+
+        // Initially, disk config should be empty/default
+        assert_eq!(screen.config.disk_path, "");
+        assert_eq!(screen.config.disk_size, 0);
+        assert_eq!(screen.config.swap_size_gb, 8);
+        assert_eq!(screen.config.root_filesystem, "ext4");
+
+        // Set disk config
+        screen.set_disk_config(
+            "/dev/nvme0n1".to_string(),
+            1_000_000_000_000,
+            16,
+            "btrfs".to_string(),
+        );
+
+        // Verify config was updated
+        assert_eq!(screen.config.disk_path, "/dev/nvme0n1");
+        assert_eq!(screen.config.disk_size, 1_000_000_000_000);
+        assert_eq!(screen.config.swap_size_gb, 16);
+        assert_eq!(screen.config.root_filesystem, "btrfs");
     }
 }

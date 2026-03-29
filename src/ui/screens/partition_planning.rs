@@ -7,7 +7,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Color,
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 use tracing::debug;
@@ -235,6 +235,35 @@ impl PartitionPlanningScreen {
         self.update_swap_size();
     }
 
+    // ===== Public Getters for Configuration =====
+
+    /// Get the configured swap size in GB
+    pub fn swap_size_gb(&self) -> u64 {
+        self.swap_size_gb
+    }
+
+    /// Get the selected disk path
+    pub fn disk_path(&self) -> &str {
+        &self.disk_path
+    }
+
+    /// Get the selected disk size in bytes
+    pub fn disk_size(&self) -> u64 {
+        self.disk_size
+    }
+
+    /// Get the selected root filesystem type
+    pub fn root_filesystem(&self) -> &str {
+        // Find the root partition (the one mounted at "/")
+        for partition in &self.partitions {
+            if partition.mountpoint == "/" {
+                return &partition.fstype;
+            }
+        }
+        // Default to ext4 if not found
+        "ext4"
+    }
+
     /// Render visual disk allocation bar
     fn render_disk_allocation_bar(&self, frame: &mut Frame<'_>, area: Rect) {
         let bar_block = Block::default()
@@ -264,7 +293,7 @@ impl PartitionPlanningScreen {
         let mut bar_chars = vec![' '; bar_width];
         let mut pos = 0;
 
-        for (idx, (_, percent, _)) in segments.iter().enumerate() {
+        for (_idx, (_, percent, _)) in segments.iter().enumerate() {
             let segment_width = (bar_width * (*percent as usize) / 100).max(1);
             let end_pos = (pos + segment_width).min(bar_width);
 
@@ -506,9 +535,13 @@ impl Screen for PartitionPlanningScreen {
 
         // Help text for input
         let help_text = if self.swap_focused {
-            "Type to adjust swap size | ↑↓ to increment/decrement | Tab to unfocus"
+            "Type to adjust swap size | ↑↓ to increment/decrement by 1GB | Tab/Enter to unfocus"
+        } else if self.focus_mode == FocusMode::PartitionEdit
+            && self.selected_field == Some(EditableField::Size)
+        {
+            "↑↓ to adjust by 1GB | Enter to type value | Esc to exit edit mode"
         } else {
-            "Tab to edit swap size | ↑↓ to adjust by 1GB"
+            "Enter on swap partition, then select Size field to edit"
         };
         let help_para = Paragraph::new(Line::from(Span::styled(
             help_text,
@@ -524,7 +557,7 @@ impl Screen for PartitionPlanningScreen {
         for (idx, partition) in self.partitions.iter().enumerate() {
             let is_selected = idx == self.selected_partition_idx;
             let is_in_edit_mode = is_selected && self.focus_mode == FocusMode::PartitionEdit;
-            let can_edit = self.can_edit_partition(idx);
+            let _can_edit = self.can_edit_partition(idx);
 
             // Partition header line with cursor
             let cursor = if is_selected && self.focus_mode == FocusMode::PartitionList {
@@ -718,6 +751,16 @@ impl Screen for PartitionPlanningScreen {
         // If swap input field is focused, handle that separately
         if self.swap_focused {
             match key {
+                KeyCode::Up => {
+                    // Increment swap by 1 GB
+                    self.adjust_swap_size(1);
+                    ScreenAction::None
+                }
+                KeyCode::Down => {
+                    // Decrement swap by 1 GB
+                    self.adjust_swap_size(-1);
+                    ScreenAction::None
+                }
                 KeyCode::Tab | KeyCode::Enter => {
                     // Unfocus and validate when exiting swap input
                     self.swap_focused = false;
@@ -772,11 +815,21 @@ impl Screen for PartitionPlanningScreen {
                 FocusMode::PartitionEdit => {
                     match key {
                         KeyCode::Up => {
-                            self.select_previous_field();
+                            // If on Size field, increment swap; otherwise navigate fields
+                            if self.selected_field == Some(EditableField::Size) {
+                                self.adjust_swap_size(1);
+                            } else {
+                                self.select_previous_field();
+                            }
                             ScreenAction::None
                         }
                         KeyCode::Down => {
-                            self.select_next_field();
+                            // If on Size field, decrement swap; otherwise navigate fields
+                            if self.selected_field == Some(EditableField::Size) {
+                                self.adjust_swap_size(-1);
+                            } else {
+                                self.select_next_field();
+                            }
                             ScreenAction::None
                         }
                         KeyCode::Left => {
@@ -1313,5 +1366,34 @@ mod tests {
 
         // Filesystem change should be persisted
         assert_eq!(screen.partitions[1].fstype, "btrfs");
+    }
+
+    #[test]
+    fn test_disk_config_getters() {
+        let mut screen = PartitionPlanningScreen::new();
+        screen.set_disk(BootMode::Uefi, "/dev/nvme0n1".to_string(), 1_000_000_000_000);
+
+        // Test disk path getter
+        assert_eq!(screen.disk_path(), "/dev/nvme0n1");
+
+        // Test disk size getter
+        assert_eq!(screen.disk_size(), 1_000_000_000_000);
+
+        // Test default swap size
+        assert_eq!(screen.swap_size_gb(), 8);
+
+        // Test default root filesystem
+        assert_eq!(screen.root_filesystem(), "ext4");
+
+        // Change swap size
+        screen.swap_input.set_value("16");
+        screen.update_swap_size();
+        assert_eq!(screen.swap_size_gb(), 16);
+
+        // Change root filesystem to btrfs
+        screen.selected_partition_idx = 1; // Root partition in UEFI mode
+        screen.enter_edit_mode();
+        screen.cycle_filesystem(1); // Change to btrfs
+        assert_eq!(screen.root_filesystem(), "btrfs");
     }
 }

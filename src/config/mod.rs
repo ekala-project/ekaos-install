@@ -21,6 +21,14 @@ pub struct InstallConfig {
     pub bootloader: BootLoader,
     /// Whether to enable NetworkManager
     pub network_manager: bool,
+    /// Disk path (e.g., "/dev/sda")
+    pub disk_path: String,
+    /// Disk size in bytes
+    pub disk_size: u64,
+    /// Swap partition size in GB
+    pub swap_size_gb: u64,
+    /// Root filesystem type (e.g., "ext4", "btrfs", "xfs", "zfs")
+    pub root_filesystem: String,
 }
 
 /// User account configuration
@@ -78,6 +86,10 @@ impl Default for InstallConfig {
             keymap: "us".to_string(),
             bootloader: BootLoader::SystemdBoot,
             network_manager: true,
+            disk_path: String::new(),
+            disk_size: 0,
+            swap_size_gb: 8,
+            root_filesystem: "ext4".to_string(),
         }
     }
 }
@@ -143,6 +155,11 @@ mod tests {
         assert_eq!(config.timezone, "America/New_York");
         assert_eq!(config.locale, "en_US.UTF-8");
         assert!(config.network_manager);
+        // Test new disk/partition fields
+        assert_eq!(config.disk_path, "");
+        assert_eq!(config.disk_size, 0);
+        assert_eq!(config.swap_size_gb, 8);
+        assert_eq!(config.root_filesystem, "ext4");
     }
 
     #[test]

@@ -215,6 +215,13 @@ fn run_event_loop(
                 AppScreen::Configuration => {
                     // Pass boot mode to configuration screen
                     configuration_screen.set_boot_mode(system_info_screen.boot_mode);
+                    // Pass disk and partition configuration
+                    configuration_screen.set_disk_config(
+                        partition_planning_screen.disk_path().to_string(),
+                        partition_planning_screen.disk_size(),
+                        partition_planning_screen.swap_size_gb(),
+                        partition_planning_screen.root_filesystem().to_string(),
+                    );
                     configuration_screen.on_enter();
                 }
                 AppScreen::Installation => {
