@@ -18,7 +18,7 @@ use ekaos_install::{
     ui::{
         components::Component, render_footer, render_header, ConfigurationScreen,
         DiskSelectionScreen, HelpPanel, InstallationScreen, Layout, PartitionPlanningScreen,
-        Screen, ScreenAction, SuccessScreen, SystemInfoScreen, WelcomeScreen,
+        Screen, ScreenAction, SuccessScreen, WelcomeScreen,
     },
     APP_NAME, VERSION,
 };
@@ -143,7 +143,6 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
 
     // Create screen instances
     let mut welcome_screen = WelcomeScreen::new(app.is_mock(), dry_run);
-    let mut system_info_screen = SystemInfoScreen::new();
     let mut disk_selection_screen = DiskSelectionScreen::new();
     let mut partition_planning_screen = PartitionPlanningScreen::new();
     let mut configuration_screen = ConfigurationScreen::new();
@@ -158,7 +157,6 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
         terminal,
         &mut app,
         &mut welcome_screen,
-        &mut system_info_screen,
         &mut disk_selection_screen,
         &mut partition_planning_screen,
         &mut configuration_screen,
@@ -174,7 +172,6 @@ fn run_event_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
     welcome_screen: &mut WelcomeScreen,
-    system_info_screen: &mut SystemInfoScreen,
     disk_selection_screen: &mut DiskSelectionScreen,
     partition_planning_screen: &mut PartitionPlanningScreen,
     configuration_screen: &mut ConfigurationScreen,
@@ -189,7 +186,6 @@ fn run_event_loop(
             // Call lifecycle methods
             match previous_screen {
                 AppScreen::Welcome => welcome_screen.on_exit(),
-                AppScreen::SystemInfo => system_info_screen.on_exit(),
                 AppScreen::DiskSelection => disk_selection_screen.on_exit(),
                 AppScreen::PartitionPlanning => partition_planning_screen.on_exit(),
                 AppScreen::Configuration => configuration_screen.on_exit(),
@@ -199,13 +195,12 @@ fn run_event_loop(
 
             match app.current_screen {
                 AppScreen::Welcome => welcome_screen.on_enter(),
-                AppScreen::SystemInfo => system_info_screen.on_enter(),
                 AppScreen::DiskSelection => disk_selection_screen.on_enter(),
                 AppScreen::PartitionPlanning => {
                     // Pass disk info to partition planning screen
                     if let Some(disk) = disk_selection_screen.selected_disk() {
                         partition_planning_screen.set_disk(
-                            system_info_screen.boot_mode,
+                            welcome_screen.boot_mode,
                             disk.path.clone(),
                             disk.size,
                         );
@@ -214,7 +209,7 @@ fn run_event_loop(
                 }
                 AppScreen::Configuration => {
                     // Pass boot mode to configuration screen
-                    configuration_screen.set_boot_mode(system_info_screen.boot_mode);
+                    configuration_screen.set_boot_mode(welcome_screen.boot_mode);
                     // Pass disk and partition configuration
                     configuration_screen.set_disk_config(
                         partition_planning_screen.disk_path().to_string(),
@@ -252,7 +247,6 @@ fn run_event_loop(
             // Render current screen
             match app.current_screen {
                 AppScreen::Welcome => welcome_screen.render(frame, content_area),
-                AppScreen::SystemInfo => system_info_screen.render(frame, content_area),
                 AppScreen::DiskSelection => disk_selection_screen.render(frame, content_area),
                 AppScreen::PartitionPlanning => {
                     partition_planning_screen.render(frame, content_area)
@@ -267,7 +261,6 @@ fn run_event_loop(
                 // Get help content from current screen
                 let help_content = match app.current_screen {
                     AppScreen::Welcome => welcome_screen.help_content(),
-                    AppScreen::SystemInfo => system_info_screen.help_content(),
                     AppScreen::DiskSelection => disk_selection_screen.help_content(),
                     AppScreen::PartitionPlanning => partition_planning_screen.help_content(),
                     AppScreen::Configuration => configuration_screen.help_content(),
@@ -308,7 +301,6 @@ fn run_event_loop(
                 // Route input to current screen
                 let action = match app.current_screen {
                     AppScreen::Welcome => welcome_screen.handle_input(key.code),
-                    AppScreen::SystemInfo => system_info_screen.handle_input(key.code),
                     AppScreen::DiskSelection => disk_selection_screen.handle_input(key.code),
                     AppScreen::PartitionPlanning => {
                         partition_planning_screen.handle_input(key.code)
@@ -324,7 +316,6 @@ fn run_event_loop(
                         // Check if screen allows proceeding
                         let can_proceed = match app.current_screen {
                             AppScreen::Welcome => welcome_screen.can_proceed(),
-                            AppScreen::SystemInfo => system_info_screen.can_proceed(),
                             AppScreen::DiskSelection => disk_selection_screen.can_proceed(),
                             AppScreen::PartitionPlanning => partition_planning_screen.can_proceed(),
                             AppScreen::Configuration => configuration_screen.can_proceed(),

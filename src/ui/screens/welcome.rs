@@ -4,12 +4,12 @@ use crossterm::event::KeyCode;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
 };
 use tracing::{debug, warn};
 
-use crate::system::{check_network, is_nixos, is_root};
+use crate::system::{check_network, detect_boot_mode, detect_system, is_nixos, is_root, BootMode, SystemInfo};
 use crate::ui::{icons, theme::AppTheme, utils::render_navigation_hints};
 
 use super::{Screen, ScreenAction};
@@ -24,6 +24,10 @@ pub struct WelcomeScreen {
     is_dry_run: bool,
     /// Pre-flight check results
     checks: PreFlightChecks,
+    /// Detected boot mode (public - needed by later screens)
+    pub boot_mode: BootMode,
+    /// Detected system information
+    system_info: SystemInfo,
 }
 
 /// Pre-flight check results
@@ -58,6 +62,8 @@ impl WelcomeScreen {
             is_mock,
             is_dry_run,
             checks: PreFlightChecks::default(),
+            boot_mode: BootMode::Unknown,
+            system_info: SystemInfo::default(),
         }
     }
 
@@ -80,8 +86,10 @@ impl Screen for WelcomeScreen {
                 Constraint::Length(3),  // Title
                 Constraint::Length(1),  // Spacer
                 Constraint::Length(2),  // Subtitle
-                Constraint::Length(2),  // Spacer
+                Constraint::Length(2),  // Spacer/Mode indicators
                 Constraint::Length(10), // Pre-flight checks
+                Constraint::Length(5),  // Boot mode
+                Constraint::Length(8),  // System information
                 Constraint::Min(0),     // Spacer
                 Constraint::Length(3),  // Instructions
             ])
@@ -145,13 +153,66 @@ impl Screen for WelcomeScreen {
             .style(self.theme.text());
         frame.render_widget(checks_para, chunks[5]);
 
+        // Boot mode section
+        let boot_mode_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Boot Mode ")
+            .border_style(self.theme.border_style());
+
+        let boot_mode_lines = vec![
+            Line::from(vec![
+                Span::styled("Mode: ", self.theme.text_muted()),
+                Span::styled(self.boot_mode.as_str(), self.theme.info_bold()),
+            ]),
+            Line::from(Span::styled(
+                self.boot_mode.description(),
+                self.theme.text_muted(),
+            )),
+        ];
+
+        let boot_mode_para = Paragraph::new(boot_mode_lines)
+            .block(boot_mode_block)
+            .style(self.theme.text());
+        frame.render_widget(boot_mode_para, chunks[6]);
+
+        // System information section
+        let system_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" System Information ")
+            .border_style(self.theme.border_style());
+
+        let info_items = vec![
+            ListItem::new(Line::from(vec![
+                Span::styled("CPU: ", self.theme.text_muted()),
+                Span::styled(&self.system_info.cpu_model, self.theme.text()),
+            ])),
+            ListItem::new(Line::from(vec![
+                Span::styled("Cores: ", self.theme.text_muted()),
+                Span::styled(self.system_info.cpu_cores.to_string(), self.theme.text()),
+            ])),
+            ListItem::new(Line::from(vec![
+                Span::styled("RAM: ", self.theme.text_muted()),
+                Span::styled(
+                    format!("{:.1} GB", self.system_info.ram_gb),
+                    self.theme.text(),
+                ),
+            ])),
+            ListItem::new(Line::from(vec![
+                Span::styled("Architecture: ", self.theme.text_muted()),
+                Span::styled(&self.system_info.architecture, self.theme.text()),
+            ])),
+        ];
+
+        let system_list = List::new(info_items).block(system_block);
+        frame.render_widget(system_list, chunks[7]);
+
         // Instructions
         if self.all_checks_passed() {
             render_navigation_hints(
                 frame,
                 &[("Enter", "Continue"), ("?", "Help"), ("q", "Quit")],
                 &self.theme,
-                chunks[7],
+                chunks[9],
             );
         } else {
             let error_msg = vec![
@@ -162,7 +223,7 @@ impl Screen for WelcomeScreen {
                 )),
             ];
             let error_para = Paragraph::new(error_msg).alignment(Alignment::Center);
-            frame.render_widget(error_para, chunks[7]);
+            frame.render_widget(error_para, chunks[9]);
         }
     }
 
@@ -238,14 +299,41 @@ impl Screen for WelcomeScreen {
             self.checks.nixos_iso,
             self.checks.disk_space
         );
+
+        // Detect boot mode
+        match detect_boot_mode() {
+            Ok(mode) => {
+                debug!("Detected boot mode: {:?}", mode);
+                self.boot_mode = mode;
+            }
+            Err(e) => {
+                warn!("Failed to detect boot mode: {}", e);
+                self.boot_mode = BootMode::Unknown;
+            }
+        }
+
+        // Detect system information
+        match detect_system() {
+            Ok(info) => {
+                debug!(
+                    "Detected system: {} ({} cores, {:.1} GB RAM, {})",
+                    info.cpu_model, info.cpu_cores, info.ram_gb, info.architecture
+                );
+                self.system_info = info;
+            }
+            Err(e) => {
+                warn!("Failed to detect system info: {}", e);
+                self.system_info = SystemInfo::default();
+            }
+        }
     }
 
     fn help_content(&self) -> Vec<String> {
         vec![
             "# Welcome Screen".to_string(),
             "".to_string(),
-            "This screen performs pre-flight checks to ensure your system".to_string(),
-            "is ready for NixOS installation.".to_string(),
+            "This screen performs pre-flight checks and displays detected system".to_string(),
+            "information to ensure your system is ready for NixOS installation.".to_string(),
             "".to_string(),
             "# Pre-Flight Checks".to_string(),
             "".to_string(),
@@ -254,11 +342,28 @@ impl Screen for WelcomeScreen {
             "- NixOS Installation Media: Must be running from official ISO".to_string(),
             "- Sufficient Disk Space: At least 10GB free space required".to_string(),
             "".to_string(),
+            "# System Information".to_string(),
+            "".to_string(),
+            "Detected system information including:".to_string(),
+            "".to_string(),
+            "- Boot Mode: UEFI or Legacy BIOS".to_string(),
+            "- CPU: Processor model and core count".to_string(),
+            "- RAM: Total system memory".to_string(),
+            "- Architecture: System architecture (x86_64, aarch64, etc.)".to_string(),
+            "".to_string(),
+            "# Boot Modes".to_string(),
+            "".to_string(),
+            "- UEFI: Modern boot mode, recommended for new systems".to_string(),
+            "  Supports GPT partition tables and Secure Boot".to_string(),
+            "".to_string(),
+            "- Legacy BIOS: Older boot mode for legacy hardware".to_string(),
+            "  Uses MBR partition tables (2TB disk limit)".to_string(),
+            "".to_string(),
             "# Keyboard Shortcuts".to_string(),
             "".to_string(),
-            "- Enter: Continue to next step (when checks pass)".to_string(),
-            "- q/Esc: Quit the installer".to_string(),
+            "- Enter: Continue to disk selection (when checks pass)".to_string(),
             "- ?: Toggle this help panel".to_string(),
+            "- q/Esc: Quit the installer".to_string(),
         ]
     }
 }

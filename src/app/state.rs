@@ -14,10 +14,8 @@ pub enum AppMode {
 /// Screens in the installation wizard
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
-    /// Welcome screen with pre-flight checks
+    /// Welcome screen with pre-flight checks and system info
     Welcome,
-    /// System information display
-    SystemInfo,
     /// Disk selection
     DiskSelection,
     /// Partition planning
@@ -34,8 +32,7 @@ impl Screen {
     /// Get the next screen in the wizard flow
     pub fn next(&self) -> Option<Self> {
         match self {
-            Screen::Welcome => Some(Screen::SystemInfo),
-            Screen::SystemInfo => Some(Screen::DiskSelection),
+            Screen::Welcome => Some(Screen::DiskSelection),
             Screen::DiskSelection => Some(Screen::PartitionPlanning),
             Screen::PartitionPlanning => Some(Screen::Configuration),
             Screen::Configuration => Some(Screen::Installation),
@@ -48,8 +45,7 @@ impl Screen {
     pub fn previous(&self) -> Option<Self> {
         match self {
             Screen::Welcome => None,
-            Screen::SystemInfo => Some(Screen::Welcome),
-            Screen::DiskSelection => Some(Screen::SystemInfo),
+            Screen::DiskSelection => Some(Screen::Welcome),
             Screen::PartitionPlanning => Some(Screen::DiskSelection),
             Screen::Configuration => Some(Screen::PartitionPlanning),
             // Cannot go back after starting installation
@@ -62,7 +58,6 @@ impl Screen {
     pub fn title(&self) -> &'static str {
         match self {
             Screen::Welcome => "Welcome to NixOS Installation",
-            Screen::SystemInfo => "System Information",
             Screen::DiskSelection => "Select Installation Disk",
             Screen::PartitionPlanning => "Partition Layout",
             Screen::Configuration => "System Configuration",
@@ -74,13 +69,12 @@ impl Screen {
     /// Get the step number for progress indication
     pub fn step_number(&self) -> (usize, usize) {
         match self {
-            Screen::Welcome => (1, 7),
-            Screen::SystemInfo => (2, 7),
-            Screen::DiskSelection => (3, 7),
-            Screen::PartitionPlanning => (4, 7),
-            Screen::Configuration => (5, 7),
-            Screen::Installation => (6, 7),
-            Screen::Complete => (7, 7),
+            Screen::Welcome => (1, 6),
+            Screen::DiskSelection => (2, 6),
+            Screen::PartitionPlanning => (3, 6),
+            Screen::Configuration => (4, 6),
+            Screen::Installation => (5, 6),
+            Screen::Complete => (6, 6),
         }
     }
 
@@ -155,13 +149,13 @@ mod tests {
 
     #[test]
     fn test_screen_progression() {
-        assert_eq!(Screen::Welcome.next(), Some(Screen::SystemInfo));
+        assert_eq!(Screen::Welcome.next(), Some(Screen::DiskSelection));
         assert_eq!(Screen::Complete.next(), None);
     }
 
     #[test]
     fn test_screen_back_navigation() {
-        assert_eq!(Screen::SystemInfo.previous(), Some(Screen::Welcome));
+        assert_eq!(Screen::DiskSelection.previous(), Some(Screen::Welcome));
         assert_eq!(Screen::Welcome.previous(), None);
         assert_eq!(Screen::Installation.previous(), None);
     }
@@ -172,7 +166,7 @@ mod tests {
         assert_eq!(app.current_screen, Screen::Welcome);
 
         app.next_screen().unwrap();
-        assert_eq!(app.current_screen, Screen::SystemInfo);
+        assert_eq!(app.current_screen, Screen::DiskSelection);
 
         app.previous_screen().unwrap();
         assert_eq!(app.current_screen, Screen::Welcome);

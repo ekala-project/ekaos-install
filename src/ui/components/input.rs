@@ -298,23 +298,34 @@ impl Component for InputField {
         };
 
         // Show cursor if focused
-        let text_line = if self.focused && self.cursor == display_text.len() {
+        // For password fields, we need to use character count, not byte position
+        let cursor_char_pos = if self.password {
+            // Cursor tracks actual value position, but display uses bullet characters
+            self.cursor.min(self.value.len())
+        } else {
+            self.cursor
+        };
+
+        let display_char_count = display_text.chars().count();
+
+        let text_line = if self.focused && cursor_char_pos == display_char_count {
             Line::from(vec![
                 Span::styled(display_text, text_style),
                 Span::styled("█", Style::default().fg(Color::Cyan)),
             ])
-        } else if self.focused && self.cursor < display_text.len() {
-            let (before, after) = display_text.split_at(self.cursor);
-            let cursor_char = after.chars().next().unwrap_or(' ');
-            let rest = &after[cursor_char.len_utf8()..];
+        } else if self.focused && cursor_char_pos < display_char_count {
+            // Split at character boundary, not byte boundary
+            let before: String = display_text.chars().take(cursor_char_pos).collect();
+            let cursor_char = display_text.chars().nth(cursor_char_pos).unwrap_or(' ');
+            let rest: String = display_text.chars().skip(cursor_char_pos + 1).collect();
 
             Line::from(vec![
-                Span::styled(before.to_string(), text_style),
+                Span::styled(before, text_style),
                 Span::styled(
                     cursor_char.to_string(),
                     Style::default().fg(Color::Black).bg(Color::Cyan),
                 ),
-                Span::styled(rest.to_string(), text_style),
+                Span::styled(rest, text_style),
             ])
         } else {
             Line::from(Span::styled(display_text, text_style))
