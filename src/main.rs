@@ -17,8 +17,8 @@ use ekaos_install::{
     app::{App, AppMode, Screen as AppScreen},
     ui::{
         components::Component, render_footer, render_header, ConfigurationScreen,
-        DiskSelectionScreen, HelpPanel, InstallationScreen, Layout, PartitionPlanningScreen,
-        Screen, ScreenAction, SuccessScreen, WelcomeScreen,
+        ConfirmationScreen, DiskSelectionScreen, HelpPanel, InstallationScreen, Layout,
+        PartitionPlanningScreen, Screen, ScreenAction, SuccessScreen, WelcomeScreen,
     },
     APP_NAME, VERSION,
 };
@@ -146,6 +146,7 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
     let mut disk_selection_screen = DiskSelectionScreen::new();
     let mut partition_planning_screen = PartitionPlanningScreen::new();
     let mut configuration_screen = ConfigurationScreen::new();
+    let mut confirmation_screen = ConfirmationScreen::new();
     let mut installation_screen = InstallationScreen::new();
     let mut success_screen = SuccessScreen::new();
 
@@ -160,6 +161,7 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
         &mut disk_selection_screen,
         &mut partition_planning_screen,
         &mut configuration_screen,
+        &mut confirmation_screen,
         &mut installation_screen,
         &mut success_screen,
     )
@@ -175,6 +177,7 @@ fn run_event_loop(
     disk_selection_screen: &mut DiskSelectionScreen,
     partition_planning_screen: &mut PartitionPlanningScreen,
     configuration_screen: &mut ConfigurationScreen,
+    confirmation_screen: &mut ConfirmationScreen,
     installation_screen: &mut InstallationScreen,
     success_screen: &mut SuccessScreen,
 ) -> Result<()> {
@@ -189,6 +192,7 @@ fn run_event_loop(
                 AppScreen::DiskSelection => disk_selection_screen.on_exit(),
                 AppScreen::PartitionPlanning => partition_planning_screen.on_exit(),
                 AppScreen::Configuration => configuration_screen.on_exit(),
+                AppScreen::Confirmation => confirmation_screen.on_exit(),
                 AppScreen::Installation => installation_screen.on_exit(),
                 AppScreen::Complete => success_screen.on_exit(),
             }
@@ -219,10 +223,17 @@ fn run_event_loop(
                     );
                     configuration_screen.on_enter();
                 }
-                AppScreen::Installation => {
-                    // Start installation with collected configuration
+                AppScreen::Confirmation => {
+                    // Pass configuration to confirmation screen for review
                     let config = configuration_screen.get_config().clone();
-                    installation_screen.start_installation(config, "/mnt".to_string(), app.is_mock());
+                    confirmation_screen.set_config(config);
+                    confirmation_screen.on_enter();
+                }
+                AppScreen::Installation => {
+                    // Start installation with confirmed configuration
+                    if let Some(config) = confirmation_screen.get_config() {
+                        installation_screen.start_installation(config.clone(), "/mnt".to_string(), app.is_mock());
+                    }
                     installation_screen.on_enter();
                 }
                 AppScreen::Complete => success_screen.on_enter(),
@@ -252,6 +263,7 @@ fn run_event_loop(
                     partition_planning_screen.render(frame, content_area)
                 }
                 AppScreen::Configuration => configuration_screen.render(frame, content_area),
+                AppScreen::Confirmation => confirmation_screen.render(frame, content_area),
                 AppScreen::Installation => installation_screen.render(frame, content_area),
                 AppScreen::Complete => success_screen.render(frame, content_area),
             }
@@ -264,6 +276,7 @@ fn run_event_loop(
                     AppScreen::DiskSelection => disk_selection_screen.help_content(),
                     AppScreen::PartitionPlanning => partition_planning_screen.help_content(),
                     AppScreen::Configuration => configuration_screen.help_content(),
+                    AppScreen::Confirmation => confirmation_screen.help_content(),
                     AppScreen::Installation => installation_screen.help_content(),
                     AppScreen::Complete => success_screen.help_content(),
                 };
@@ -306,6 +319,7 @@ fn run_event_loop(
                         partition_planning_screen.handle_input(key.code)
                     }
                     AppScreen::Configuration => configuration_screen.handle_input(key.code),
+                    AppScreen::Confirmation => confirmation_screen.handle_input(key.code),
                     AppScreen::Installation => installation_screen.handle_input(key.code),
                     AppScreen::Complete => success_screen.handle_input(key.code),
                 };
@@ -319,6 +333,7 @@ fn run_event_loop(
                             AppScreen::DiskSelection => disk_selection_screen.can_proceed(),
                             AppScreen::PartitionPlanning => partition_planning_screen.can_proceed(),
                             AppScreen::Configuration => configuration_screen.can_proceed(),
+                            AppScreen::Confirmation => confirmation_screen.can_proceed(),
                             AppScreen::Installation => installation_screen.can_proceed(),
                             AppScreen::Complete => success_screen.can_proceed(),
                         };

@@ -22,6 +22,8 @@ pub enum Screen {
     PartitionPlanning,
     /// Configuration setup
     Configuration,
+    /// Confirmation/review screen
+    Confirmation,
     /// Installation progress
     Installation,
     /// Success/completion screen
@@ -35,7 +37,8 @@ impl Screen {
             Screen::Welcome => Some(Screen::DiskSelection),
             Screen::DiskSelection => Some(Screen::PartitionPlanning),
             Screen::PartitionPlanning => Some(Screen::Configuration),
-            Screen::Configuration => Some(Screen::Installation),
+            Screen::Configuration => Some(Screen::Confirmation),
+            Screen::Confirmation => Some(Screen::Installation),
             Screen::Installation => Some(Screen::Complete),
             Screen::Complete => None,
         }
@@ -48,6 +51,7 @@ impl Screen {
             Screen::DiskSelection => Some(Screen::Welcome),
             Screen::PartitionPlanning => Some(Screen::DiskSelection),
             Screen::Configuration => Some(Screen::PartitionPlanning),
+            Screen::Confirmation => Some(Screen::Configuration),
             // Cannot go back after starting installation
             Screen::Installation => None,
             Screen::Complete => None,
@@ -61,6 +65,7 @@ impl Screen {
             Screen::DiskSelection => "Select Installation Disk",
             Screen::PartitionPlanning => "Partition Layout",
             Screen::Configuration => "System Configuration",
+            Screen::Confirmation => "Review Configuration",
             Screen::Installation => "Installing NixOS",
             Screen::Complete => "Installation Complete",
         }
@@ -69,12 +74,13 @@ impl Screen {
     /// Get the step number for progress indication
     pub fn step_number(&self) -> (usize, usize) {
         match self {
-            Screen::Welcome => (1, 6),
-            Screen::DiskSelection => (2, 6),
-            Screen::PartitionPlanning => (3, 6),
-            Screen::Configuration => (4, 6),
-            Screen::Installation => (5, 6),
-            Screen::Complete => (6, 6),
+            Screen::Welcome => (1, 7),
+            Screen::DiskSelection => (2, 7),
+            Screen::PartitionPlanning => (3, 7),
+            Screen::Configuration => (4, 7),
+            Screen::Confirmation => (5, 7),
+            Screen::Installation => (6, 7),
+            Screen::Complete => (7, 7),
         }
     }
 
