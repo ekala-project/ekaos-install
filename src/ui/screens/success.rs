@@ -4,11 +4,11 @@
 
 use crossterm::event::KeyCode;
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
-    Frame,
 };
 
 use crate::ui::{theme::AppTheme, utils::render_navigation_hints};
@@ -132,7 +132,9 @@ impl Screen for SuccessScreen {
             ListItem::new(Line::from("3. Log in with your user account")),
             ListItem::new(Line::from("4. Customize your system:")),
             ListItem::new(Line::from("   • Edit /etc/nixos/configuration.nix")),
-            ListItem::new(Line::from("   • Run 'sudo nixos-rebuild switch' to apply changes")),
+            ListItem::new(Line::from(
+                "   • Run 'sudo nixos-rebuild switch' to apply changes",
+            )),
             ListItem::new(Line::from("")),
             ListItem::new(Line::from(vec![
                 Span::raw("Learn more: "),

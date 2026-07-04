@@ -6,11 +6,11 @@
 //! - Footer: Navigation hints and help information
 
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Gauge, Paragraph},
-    Frame,
 };
 
 use crate::app::Screen;

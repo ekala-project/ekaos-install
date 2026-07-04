@@ -3,11 +3,11 @@
 //! Single-select list with keyboard navigation
 
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem},
-    Frame,
 };
 
 use super::{Component, Focusable, InputEvent, Interactive};

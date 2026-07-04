@@ -4,11 +4,11 @@
 
 use crossterm::event::KeyCode;
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 use tracing::debug;
 
@@ -18,7 +18,7 @@ use crate::data::locales::get_locale_list;
 use crate::data::timezones::{detect_timezone, get_timezone_list};
 use crate::system::BootMode;
 use crate::ui::{
-    components::{Button, Component, Focusable, FilterableSelectList, InputField, Interactive},
+    components::{Button, Component, FilterableSelectList, Focusable, InputField, Interactive},
     theme::AppTheme,
     utils::{keycode_to_input_event, render_navigation_hints},
 };
@@ -93,26 +93,23 @@ impl ConfigurationScreen {
 
         // Create timezone selector with all available timezones
         let timezones = get_timezone_list();
-        let timezone_items: Vec<(String, String)> = timezones
-            .into_iter()
-            .map(|tz| (tz.clone(), tz))
-            .collect();
-        let mut timezone_selector = FilterableSelectList::new("Timezone")
-            .with_items(timezone_items);
+        let timezone_items: Vec<(String, String)> =
+            timezones.into_iter().map(|tz| (tz.clone(), tz)).collect();
+        let mut timezone_selector =
+            FilterableSelectList::new("Timezone").with_items(timezone_items);
         // Try to auto-detect timezone, fall back to America/New_York
         let default_tz = detect_timezone().unwrap_or_else(|| "America/New_York".to_string());
         timezone_selector.set_selected_by_label(&default_tz);
 
         // Create keymap selector
         let keymap_items = get_keymap_list();
-        let mut keymap_selector = FilterableSelectList::new("Keyboard Layout")
-            .with_items(keymap_items);
+        let mut keymap_selector =
+            FilterableSelectList::new("Keyboard Layout").with_items(keymap_items);
         keymap_selector.set_selected_by_label("us");
 
         // Create locale selector
         let locale_items = get_locale_list();
-        let mut locale_selector = FilterableSelectList::new("Locale")
-            .with_items(locale_items);
+        let mut locale_selector = FilterableSelectList::new("Locale").with_items(locale_items);
         locale_selector.set_selected_by_label("en_US.UTF-8");
 
         let continue_button = Button::new("Continue");
@@ -271,19 +268,19 @@ impl Screen for ConfigurationScreen {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(2),  // Instructions
-                Constraint::Length(3),  // Hostname
-                Constraint::Length(3),  // Username
-                Constraint::Length(3),  // Password
-                Constraint::Length(1),  // Password strength
-                Constraint::Length(3),  // Confirm password
-                Constraint::Length(8),  // Timezone selector
-                Constraint::Length(8),  // Keymap selector
-                Constraint::Length(8),  // Locale selector
-                Constraint::Length(3),  // Continue button
-                Constraint::Length(3),  // Error/status
-                Constraint::Min(0),     // Spacer
-                Constraint::Length(3),  // Navigation
+                Constraint::Length(2), // Instructions
+                Constraint::Length(3), // Hostname
+                Constraint::Length(3), // Username
+                Constraint::Length(3), // Password
+                Constraint::Length(1), // Password strength
+                Constraint::Length(3), // Confirm password
+                Constraint::Length(8), // Timezone selector
+                Constraint::Length(8), // Keymap selector
+                Constraint::Length(8), // Locale selector
+                Constraint::Length(3), // Continue button
+                Constraint::Length(3), // Error/status
+                Constraint::Min(0),    // Spacer
+                Constraint::Length(3), // Navigation
             ])
             .split(area);
 
@@ -388,16 +385,20 @@ impl Screen for ConfigurationScreen {
                 self.focus_next();
                 ScreenAction::None
             }
-            KeyCode::Down if !self.timezone_selector.is_focused()
-                && !self.keymap_selector.is_focused()
-                && !self.locale_selector.is_focused() => {
+            KeyCode::Down
+                if !self.timezone_selector.is_focused()
+                    && !self.keymap_selector.is_focused()
+                    && !self.locale_selector.is_focused() =>
+            {
                 // Only use Down for navigation if not in a selector
                 self.focus_next();
                 ScreenAction::None
             }
-            KeyCode::Up if !self.timezone_selector.is_focused()
-                && !self.keymap_selector.is_focused()
-                && !self.locale_selector.is_focused() => {
+            KeyCode::Up
+                if !self.timezone_selector.is_focused()
+                    && !self.keymap_selector.is_focused()
+                    && !self.locale_selector.is_focused() =>
+            {
                 // Only use Up for navigation if not in a selector
                 self.focus_previous();
                 ScreenAction::None

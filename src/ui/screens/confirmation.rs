@@ -5,10 +5,10 @@
 
 use crossterm::event::KeyCode;
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 
 use crate::config::InstallConfig;
@@ -75,25 +75,22 @@ impl Screen for ConfirmationScreen {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Title
-                Constraint::Length(6),  // System settings
-                Constraint::Length(4),  // User account
-                Constraint::Length(7),  // Disk & partitioning
-                Constraint::Length(3),  // Bootloader
-                Constraint::Length(3),  // Warning message
-                Constraint::Length(3),  // Confirmation input
-                Constraint::Min(0),     // Spacer
-                Constraint::Length(3),  // Navigation
+                Constraint::Length(3), // Title
+                Constraint::Length(6), // System settings
+                Constraint::Length(4), // User account
+                Constraint::Length(7), // Disk & partitioning
+                Constraint::Length(3), // Bootloader
+                Constraint::Length(3), // Warning message
+                Constraint::Length(3), // Confirmation input
+                Constraint::Min(0),    // Spacer
+                Constraint::Length(3), // Navigation
             ])
             .split(area);
 
         // Title
         let title = Paragraph::new(vec![
             Line::from(""),
-            Line::from(Span::styled(
-                "Review Configuration",
-                self.theme.title(),
-            )),
+            Line::from(Span::styled("Review Configuration", self.theme.title())),
         ])
         .alignment(Alignment::Center);
         frame.render_widget(title, chunks[0]);
@@ -141,12 +138,10 @@ impl Screen for ConfirmationScreen {
             .title(" User Account ")
             .border_style(self.theme.border_style());
 
-        let user_lines = vec![
-            Line::from(vec![
-                Span::styled("  Username:  ", self.theme.text_muted()),
-                Span::styled(&config.user.username, self.theme.text()),
-            ]),
-        ];
+        let user_lines = vec![Line::from(vec![
+            Span::styled("  Username:  ", self.theme.text_muted()),
+            Span::styled(&config.user.username, self.theme.text()),
+        ])];
 
         let user_para = Paragraph::new(user_lines).block(user_block);
         frame.render_widget(user_para, chunks[2]);
@@ -169,7 +164,10 @@ impl Screen for ConfirmationScreen {
             Line::from(vec![
                 Span::styled("  Disk:       ", self.theme.text_muted()),
                 Span::styled(&config.disk_path, self.theme.text()),
-                Span::styled(format!(" ({:.1} GB)", disk_size_gb), self.theme.text_muted()),
+                Span::styled(
+                    format!(" ({:.1} GB)", disk_size_gb),
+                    self.theme.text_muted(),
+                ),
             ]),
             Line::from(vec![
                 Span::styled("  Filesystem: ", self.theme.text_muted()),
@@ -222,11 +220,7 @@ impl Screen for ConfirmationScreen {
 
         // Navigation hints
         let hints = if self.confirmed {
-            vec![
-                ("Enter", "BEGIN INSTALL"),
-                ("←", "Go Back"),
-                ("?", "Help"),
-            ]
+            vec![("Enter", "BEGIN INSTALL"), ("←", "Go Back"), ("?", "Help")]
         } else {
             vec![
                 ("Type DELETE", "to confirm"),
@@ -235,12 +229,7 @@ impl Screen for ConfirmationScreen {
             ]
         };
 
-        render_navigation_hints(
-            frame,
-            &hints,
-            &self.theme,
-            chunks[8],
-        );
+        render_navigation_hints(frame, &hints, &self.theme, chunks[8]);
     }
 
     fn handle_input(&mut self, key: KeyCode) -> ScreenAction {

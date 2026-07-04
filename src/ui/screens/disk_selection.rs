@@ -4,14 +4,14 @@
 
 use crossterm::event::KeyCode;
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
-    Frame,
 };
 use tracing::{debug, warn};
 
-use crate::nixos::{detect_disks, Disk};
+use crate::nixos::{Disk, detect_disks};
 use crate::ui::{theme::AppTheme, utils::render_navigation_hints};
 
 use super::{Screen, ScreenAction};
@@ -196,7 +196,9 @@ impl Screen for DiskSelectionScreen {
                     if !disk.partitions.is_empty() && is_selected {
                         for part in &disk.partitions {
                             let fs_str = part.fstype.as_deref().unwrap_or("unknown");
-                            let label_str = part.label.as_ref()
+                            let label_str = part
+                                .label
+                                .as_ref()
                                 .map(|l| format!(" \"{}\"", l))
                                 .unwrap_or_default();
                             lines.push(Line::from(vec![

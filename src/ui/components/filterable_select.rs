@@ -4,11 +4,11 @@
 //! items and select from the filtered results.
 
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
-    Frame,
 };
 
 use super::{Component, Focusable, InputEvent, Interactive};
@@ -85,7 +85,9 @@ where
         if self.filtered_indices.is_empty() {
             return None;
         }
-        let filtered_idx = self.selected.min(self.filtered_indices.len().saturating_sub(1));
+        let filtered_idx = self
+            .selected
+            .min(self.filtered_indices.len().saturating_sub(1));
         let item_idx = self.filtered_indices[filtered_idx];
         Some(&self.items[item_idx].value)
     }
@@ -95,7 +97,9 @@ where
         if self.filtered_indices.is_empty() {
             return None;
         }
-        let filtered_idx = self.selected.min(self.filtered_indices.len().saturating_sub(1));
+        let filtered_idx = self
+            .selected
+            .min(self.filtered_indices.len().saturating_sub(1));
         let item_idx = self.filtered_indices[filtered_idx];
         Some(&self.items[item_idx].label)
     }
@@ -302,8 +306,8 @@ where
             format!("Filter: {}", self.query)
         };
 
-        let input_para = Paragraph::new(query_display)
-            .style(Style::default().fg(if self.focused {
+        let input_para =
+            Paragraph::new(query_display).style(Style::default().fg(if self.focused {
                 Color::Cyan
             } else {
                 Color::White
@@ -354,8 +358,7 @@ where
             format!("{} matches", self.filtered_indices.len())
         };
 
-        let status_para =
-            Paragraph::new(status_text).style(Style::default().fg(Color::DarkGray));
+        let status_para = Paragraph::new(status_text).style(Style::default().fg(Color::DarkGray));
         frame.render_widget(status_para, status_area);
     }
 

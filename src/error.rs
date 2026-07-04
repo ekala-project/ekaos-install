@@ -66,7 +66,7 @@ pub enum DiskError {
         /// Available disk space in bytes
         available: u64,
         /// Required disk space in bytes
-        required: u64
+        required: u64,
     },
 }
 
@@ -79,7 +79,7 @@ pub enum PartitionError {
         /// Device path
         device: String,
         /// Failure reason
-        reason: String
+        reason: String,
     },
 
     /// Failed to create a partition
@@ -146,7 +146,7 @@ pub enum ConfigError {
         /// Configuration file path
         path: String,
         /// Failure reason
-        reason: String
+        reason: String,
     },
 
     /// Failed to read configuration file
@@ -155,7 +155,7 @@ pub enum ConfigError {
         /// Configuration file path
         path: String,
         /// Failure reason
-        reason: String
+        reason: String,
     },
 }
 
@@ -183,7 +183,7 @@ pub enum CommandError {
         /// Command name
         command: String,
         /// Timeout in seconds
-        timeout: u64
+        timeout: u64,
     },
 
     /// Invalid command arguments
@@ -230,21 +230,26 @@ impl InstallerError {
     /// Get suggested action for the user
     pub fn suggestion(&self) -> Option<String> {
         match self {
-            InstallerError::Disk(DiskError::NotFound(disk)) => {
-                Some(format!("Please check that disk '{}' is connected and detected by the system. Run 'lsblk' to see available disks.", disk))
-            }
-            InstallerError::Disk(DiskError::DiskBusy(_)) => {
-                Some("The disk may be mounted or in use. Try unmounting all partitions first.".to_string())
-            }
-            InstallerError::Disk(DiskError::InsufficientSpace { .. }) => {
-                Some("Please select a disk with more available space or reduce the swap size.".to_string())
-            }
-            InstallerError::Command(CommandError::NotFound(cmd)) => {
-                Some(format!("The command '{}' is not available. Make sure you're running from NixOS installation media.", cmd))
-            }
-            InstallerError::Filesystem(FilesystemError::MountFailed { .. }) => {
-                Some("Ensure the filesystem was created successfully and the mount point exists.".to_string())
-            }
+            InstallerError::Disk(DiskError::NotFound(disk)) => Some(format!(
+                "Please check that disk '{}' is connected and detected by the system. Run 'lsblk' to see available disks.",
+                disk
+            )),
+            InstallerError::Disk(DiskError::DiskBusy(_)) => Some(
+                "The disk may be mounted or in use. Try unmounting all partitions first."
+                    .to_string(),
+            ),
+            InstallerError::Disk(DiskError::InsufficientSpace { .. }) => Some(
+                "Please select a disk with more available space or reduce the swap size."
+                    .to_string(),
+            ),
+            InstallerError::Command(CommandError::NotFound(cmd)) => Some(format!(
+                "The command '{}' is not available. Make sure you're running from NixOS installation media.",
+                cmd
+            )),
+            InstallerError::Filesystem(FilesystemError::MountFailed { .. }) => Some(
+                "Ensure the filesystem was created successfully and the mount point exists."
+                    .to_string(),
+            ),
             _ => None,
         }
     }

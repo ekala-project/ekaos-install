@@ -4,11 +4,11 @@
 
 use crossterm::event::KeyCode;
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::Color,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 use tracing::debug;
 
@@ -233,7 +233,11 @@ impl PartitionPlanningScreen {
         if let Ok(size) = value.parse::<u64>() {
             // Validate minimum and maximum
             let min_swap = 1; // 1 GB minimum
-            let esp_size_gb = if matches!(self.boot_mode, BootMode::Uefi) { 1 } else { 0 };
+            let esp_size_gb = if matches!(self.boot_mode, BootMode::Uefi) {
+                1
+            } else {
+                0
+            };
             let max_swap = (self.disk_size / 1_000_000_000).saturating_sub(10 + esp_size_gb); // Leave 10GB for root
 
             let validated_size = size.max(min_swap).min(max_swap);
@@ -310,9 +314,9 @@ impl PartitionPlanningScreen {
 
             // Assign colors based on partition type
             colors.push(match idx {
-                0 if self.partitions.len() == 3 => Color::Cyan,     // ESP
-                _ if partition.fstype == "swap" => Color::Yellow,    // Swap
-                _ => Color::Green,                                   // Root
+                0 if self.partitions.len() == 3 => Color::Cyan, // ESP
+                _ if partition.fstype == "swap" => Color::Yellow, // Swap
+                _ => Color::Green,                              // Root
             });
         }
 
@@ -336,11 +340,15 @@ impl PartitionPlanningScreen {
 
         // Show bar
         let bar_line = Line::from(
-            segments.iter().enumerate().map(|(idx, (_, percent, _))| {
-                let segment_width = (bar_width * (*percent as usize) / 100).max(1);
-                let chars: String = "█".repeat(segment_width);
-                Span::styled(chars, self.theme.text().fg(colors[idx]))
-            }).collect::<Vec<_>>()
+            segments
+                .iter()
+                .enumerate()
+                .map(|(idx, (_, percent, _))| {
+                    let segment_width = (bar_width * (*percent as usize) / 100).max(1);
+                    let chars: String = "█".repeat(segment_width);
+                    Span::styled(chars, self.theme.text().fg(colors[idx]))
+                })
+                .collect::<Vec<_>>(),
         );
         lines.push(bar_line);
         lines.push(Line::from(""));
@@ -497,13 +505,13 @@ impl Screen for PartitionPlanningScreen {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(5),               // Disk info
-                Constraint::Length(9),               // Visual disk allocation bar
-                Constraint::Length(5),               // Swap size input
+                Constraint::Length(5),                 // Disk info
+                Constraint::Length(9),                 // Visual disk allocation bar
+                Constraint::Length(5),                 // Swap size input
                 Constraint::Length(encryption_height), // Encryption toggle + passphrase
-                Constraint::Min(8),                  // Partition list (smaller)
-                Constraint::Length(5),               // Summary
-                Constraint::Length(3),               // Navigation hints
+                Constraint::Min(8),                    // Partition list (smaller)
+                Constraint::Length(5),                 // Summary
+                Constraint::Length(3),                 // Navigation hints
             ])
             .split(area);
 
@@ -573,11 +581,9 @@ impl Screen for PartitionPlanningScreen {
         } else {
             "Enter on swap partition, then select Size field to edit"
         };
-        let help_para = Paragraph::new(Line::from(Span::styled(
-            help_text,
-            self.theme.text_muted(),
-        )))
-        .alignment(ratatui::layout::Alignment::Center);
+        let help_para =
+            Paragraph::new(Line::from(Span::styled(help_text, self.theme.text_muted())))
+                .alignment(ratatui::layout::Alignment::Center);
         frame.render_widget(help_para, input_layout[2]);
 
         // Encryption section
@@ -611,18 +617,22 @@ impl Screen for PartitionPlanningScreen {
             ]);
             frame.render_widget(Paragraph::new(toggle_line), encrypt_layout[0]);
 
-            self.luks_passphrase_input.set_focused(self.luks_focused && self.luks_field_idx == 0);
+            self.luks_passphrase_input
+                .set_focused(self.luks_focused && self.luks_field_idx == 0);
             Component::render(&mut self.luks_passphrase_input, frame, encrypt_layout[1]);
-            self.luks_passphrase_confirm_input.set_focused(self.luks_focused && self.luks_field_idx == 1);
-            Component::render(&mut self.luks_passphrase_confirm_input, frame, encrypt_layout[2]);
+            self.luks_passphrase_confirm_input
+                .set_focused(self.luks_focused && self.luks_field_idx == 1);
+            Component::render(
+                &mut self.luks_passphrase_confirm_input,
+                frame,
+                encrypt_layout[2],
+            );
         } else {
-            let toggle_lines = vec![
-                Line::from(vec![
-                    Span::styled("  [ ] ", self.theme.text_muted()),
-                    Span::styled("Encrypt root partition (LUKS)", self.theme.text()),
-                    Span::styled("    Press 'e' to toggle", self.theme.text_muted()),
-                ]),
-            ];
+            let toggle_lines = vec![Line::from(vec![
+                Span::styled("  [ ] ", self.theme.text_muted()),
+                Span::styled("Encrypt root partition (LUKS)", self.theme.text()),
+                Span::styled("    Press 'e' to toggle", self.theme.text_muted()),
+            ])];
             let encrypt_para = Paragraph::new(toggle_lines).block(encrypt_block);
             frame.render_widget(encrypt_para, chunks[3]);
         }
@@ -654,7 +664,11 @@ impl Screen for PartitionPlanningScreen {
                 Span::styled(&partition.label, header_style),
                 Span::styled(
                     format!("  [{}]", partition.size_human()),
-                    if is_selected { self.theme.text() } else { self.theme.text_muted() }
+                    if is_selected {
+                        self.theme.text()
+                    } else {
+                        self.theme.text_muted()
+                    },
                 ),
             ]));
 
@@ -663,7 +677,8 @@ impl Screen for PartitionPlanningScreen {
 
             // Size field (for swap partition)
             if editable_fields.contains(&EditableField::Size) {
-                let is_size_focused = is_in_edit_mode && self.selected_field == Some(EditableField::Size);
+                let is_size_focused =
+                    is_in_edit_mode && self.selected_field == Some(EditableField::Size);
                 let field_cursor = if is_size_focused { "  > " } else { "    " };
                 let field_style = if is_size_focused {
                     self.theme.focused_item()
@@ -673,7 +688,14 @@ impl Screen for PartitionPlanningScreen {
 
                 partition_lines.push(Line::from(vec![
                     Span::styled(field_cursor, field_style),
-                    Span::styled("Size: ", if is_size_focused { self.theme.text() } else { self.theme.text_muted() }),
+                    Span::styled(
+                        "Size: ",
+                        if is_size_focused {
+                            self.theme.text()
+                        } else {
+                            self.theme.text_muted()
+                        },
+                    ),
                     Span::styled(partition.size_human(), field_style),
                 ]));
             } else {
@@ -681,22 +703,41 @@ impl Screen for PartitionPlanningScreen {
                 partition_lines.push(Line::from(vec![
                     Span::raw("    "),
                     Span::styled("Size: ", self.theme.text_muted()),
-                    Span::styled(format!("{} (fixed)", partition.size_human()), self.theme.text()),
+                    Span::styled(
+                        format!("{} (fixed)", partition.size_human()),
+                        self.theme.text(),
+                    ),
                 ]));
             }
 
             // Filesystem type field
             if editable_fields.contains(&EditableField::FilesystemType) {
-                let is_type_focused = is_in_edit_mode && self.selected_field == Some(EditableField::FilesystemType);
+                let is_type_focused =
+                    is_in_edit_mode && self.selected_field == Some(EditableField::FilesystemType);
                 let field_cursor = if is_type_focused { "  > " } else { "    " };
 
                 // Show filesystem options with current selection
                 let mut fs_spans = vec![
-                    Span::styled(field_cursor, if is_type_focused { self.theme.focused_item() } else { self.theme.text() }),
-                    Span::styled("Type: ", if is_type_focused { self.theme.text() } else { self.theme.text_muted() }),
+                    Span::styled(
+                        field_cursor,
+                        if is_type_focused {
+                            self.theme.focused_item()
+                        } else {
+                            self.theme.text()
+                        },
+                    ),
+                    Span::styled(
+                        "Type: ",
+                        if is_type_focused {
+                            self.theme.text()
+                        } else {
+                            self.theme.text_muted()
+                        },
+                    ),
                 ];
 
-                let options: Vec<&str> = ROOT_FILESYSTEM_OPTIONS.iter().map(|(fs, _)| *fs).collect();
+                let options: Vec<&str> =
+                    ROOT_FILESYSTEM_OPTIONS.iter().map(|(fs, _)| *fs).collect();
                 for (i, &fs) in options.iter().enumerate() {
                     if i > 0 {
                         fs_spans.push(Span::styled("  ", self.theme.text_muted()));
@@ -705,7 +746,11 @@ impl Screen for PartitionPlanningScreen {
                     if fs == partition.fstype {
                         fs_spans.push(Span::styled(
                             format!("{} ◄", fs),
-                            if is_type_focused { self.theme.focused_item() } else { self.theme.success() }
+                            if is_type_focused {
+                                self.theme.focused_item()
+                            } else {
+                                self.theme.success()
+                            },
                         ));
                     } else if is_type_focused {
                         fs_spans.push(Span::styled(fs, self.theme.text_muted()));
@@ -855,7 +900,10 @@ impl Screen for PartitionPlanningScreen {
                         if self.luks_field_idx == 0 {
                             Interactive::handle_input(&mut self.luks_passphrase_input, event);
                         } else {
-                            Interactive::handle_input(&mut self.luks_passphrase_confirm_input, event);
+                            Interactive::handle_input(
+                                &mut self.luks_passphrase_confirm_input,
+                                event,
+                            );
                         }
                     }
                     ScreenAction::None
@@ -1499,7 +1547,11 @@ mod tests {
     #[test]
     fn test_disk_config_getters() {
         let mut screen = PartitionPlanningScreen::new();
-        screen.set_disk(BootMode::Uefi, "/dev/nvme0n1".to_string(), 1_000_000_000_000);
+        screen.set_disk(
+            BootMode::Uefi,
+            "/dev/nvme0n1".to_string(),
+            1_000_000_000_000,
+        );
 
         // Test disk path getter
         assert_eq!(screen.disk_path(), "/dev/nvme0n1");

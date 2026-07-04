@@ -3,7 +3,7 @@
 //! Detects available disks using lsblk and parses disk information.
 
 use crate::error::Result;
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use tracing::debug;
@@ -208,18 +208,24 @@ fn detect_disks_real() -> Result<Vec<Disk>> {
             let disk_type = classify_disk_type(&dev.name);
             let size_human = format_size_human(dev.size);
 
-            let partitions = dev.children.as_ref().map(|children| {
-                children.iter().filter(|c| c.device_type == "part").map(|c| {
-                    PartitionInfo {
-                        name: c.name.clone(),
-                        size: c.size,
-                        size_human: format_size_human(c.size),
-                        fstype: c.fstype.clone(),
-                        mountpoint: c.mountpoint.clone(),
-                        label: c.label.clone(),
-                    }
-                }).collect::<Vec<_>>()
-            }).unwrap_or_default();
+            let partitions = dev
+                .children
+                .as_ref()
+                .map(|children| {
+                    children
+                        .iter()
+                        .filter(|c| c.device_type == "part")
+                        .map(|c| PartitionInfo {
+                            name: c.name.clone(),
+                            size: c.size,
+                            size_human: format_size_human(c.size),
+                            fstype: c.fstype.clone(),
+                            mountpoint: c.mountpoint.clone(),
+                            label: c.label.clone(),
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
 
             Disk {
                 name: dev.name.clone(),
@@ -448,10 +454,16 @@ mod tests {
 
             // Verify no zram or ram devices are included
             for disk in &disks {
-                assert!(!disk.name.starts_with("zram"),
-                    "zram device should be filtered out: {}", disk.name);
-                assert!(!disk.name.starts_with("ram"),
-                    "ram device should be filtered out: {}", disk.name);
+                assert!(
+                    !disk.name.starts_with("zram"),
+                    "zram device should be filtered out: {}",
+                    disk.name
+                );
+                assert!(
+                    !disk.name.starts_with("ram"),
+                    "ram device should be filtered out: {}",
+                    disk.name
+                );
             }
         }
     }

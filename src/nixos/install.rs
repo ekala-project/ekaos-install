@@ -7,7 +7,7 @@ use crate::config::InstallConfig;
 use crate::error::{CommandError, ConfigError, InstallerError};
 use crate::system::command::{CommandExecutor, MockExecutor, RealExecutor};
 use std::path::Path;
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread;
 use std::time::Duration;
 
