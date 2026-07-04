@@ -163,7 +163,7 @@ impl Component for CheckboxList {
             .title(self.title.as_str())
             .border_style(Style::default().fg(border_color));
 
-        let items: Vec<ListItem> = self
+        let items: Vec<ListItem<'_>> = self
             .items
             .iter()
             .enumerate()

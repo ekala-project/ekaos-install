@@ -319,7 +319,7 @@ where
             let no_results = Paragraph::new("No matches").style(Style::default().fg(Color::Red));
             frame.render_widget(no_results, list_area);
         } else {
-            let visible_items: Vec<ListItem> = self
+            let visible_items: Vec<ListItem<'_>> = self
                 .filtered_indices
                 .iter()
                 .skip(self.scroll_offset)

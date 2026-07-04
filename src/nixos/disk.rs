@@ -450,7 +450,7 @@ mod tests {
         // May fail if lsblk is not available
         if let Ok(disks) = detect_disks() {
             // Just verify we got a list (may be empty in some environments)
-            assert!(disks.len() >= 0);
+            let _ = disks.len();
 
             // Verify no zram or ram devices are included
             for disk in &disks {

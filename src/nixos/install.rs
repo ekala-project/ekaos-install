@@ -5,7 +5,7 @@
 
 use crate::config::InstallConfig;
 use crate::error::{CommandError, ConfigError, InstallerError};
-use crate::system::command::{CommandExecutor, MockExecutor, RealExecutor};
+use crate::system::command::{CommandExecutor, RealExecutor};
 use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread;
@@ -164,7 +164,6 @@ impl InstallExecutor for RealInstallExecutor {
 
 /// Mock installation executor for testing
 pub struct MockInstallExecutor {
-    executor: MockExecutor,
     should_fail: bool,
 }
 
@@ -172,7 +171,6 @@ impl MockInstallExecutor {
     /// Create a new mock installation executor
     pub fn new() -> Self {
         Self {
-            executor: MockExecutor::new(),
             should_fail: false,
         }
     }

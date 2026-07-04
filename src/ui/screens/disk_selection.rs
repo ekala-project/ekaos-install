@@ -150,7 +150,7 @@ impl Screen for DiskSelectionScreen {
             frame.render_widget(empty_para, chunks[1]);
         } else {
             // Show disk list
-            let disk_items: Vec<ListItem> = self
+            let disk_items: Vec<ListItem<'_>> = self
                 .disks
                 .iter()
                 .enumerate()
@@ -433,6 +433,6 @@ mod tests {
         assert!(screen.detected);
 
         // In mock mode, should detect disks
-        assert!(screen.disks.len() >= 0);
+        assert!(!screen.disks.is_empty());
     }
 }
