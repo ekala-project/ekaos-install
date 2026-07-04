@@ -148,6 +148,12 @@ impl Screen for ConfirmationScreen {
 
         let disk_size_gb = config.disk_size as f64 / 1_000_000_000.0;
 
+        let encryption_status = if config.luks_encryption {
+            "Yes (LUKS)"
+        } else {
+            "No"
+        };
+
         let disk_lines = vec![
             Line::from(vec![
                 Span::styled("  Disk:       ", self.theme.text_muted()),
@@ -161,6 +167,10 @@ impl Screen for ConfirmationScreen {
             Line::from(vec![
                 Span::styled("  Swap:       ", self.theme.text_muted()),
                 Span::styled(format!("{} GB", config.swap_size_gb), self.theme.text()),
+            ]),
+            Line::from(vec![
+                Span::styled("  Encryption: ", self.theme.text_muted()),
+                Span::styled(encryption_status, self.theme.text()),
             ]),
         ];
 

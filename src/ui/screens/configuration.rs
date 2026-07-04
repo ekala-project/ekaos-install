@@ -5,13 +5,15 @@
 use crossterm::event::KeyCode;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    text::{Line, Span},
+    text::Line,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
 use tracing::debug;
 
 use crate::config::{BootLoader, InstallConfig};
+use crate::data::keymaps::get_keymap_list;
+use crate::data::locales::get_locale_list;
 use crate::data::timezones::get_timezone_list;
 use crate::system::BootMode;
 use crate::ui::{
@@ -34,6 +36,8 @@ pub struct ConfigurationScreen {
     password_input: InputField,
     password_confirm_input: InputField,
     timezone_selector: FilterableSelectList<String>,
+    keymap_selector: FilterableSelectList<String>,
+    locale_selector: FilterableSelectList<String>,
     continue_button: Button,
     /// Currently focused field
     focused_field: FocusedField,
@@ -48,6 +52,8 @@ enum FocusedField {
     Password,
     PasswordConfirm,
     Timezone,
+    Keymap,
+    Locale,
     ContinueButton,
 }
 
@@ -73,6 +79,18 @@ impl ConfigurationScreen {
         // Set default to America/New_York
         timezone_selector.set_selected_by_label("America/New_York");
 
+        // Create keymap selector
+        let keymap_items = get_keymap_list();
+        let mut keymap_selector = FilterableSelectList::new("Keyboard Layout")
+            .with_items(keymap_items);
+        keymap_selector.set_selected_by_label("us");
+
+        // Create locale selector
+        let locale_items = get_locale_list();
+        let mut locale_selector = FilterableSelectList::new("Locale")
+            .with_items(locale_items);
+        locale_selector.set_selected_by_label("en_US.UTF-8");
+
         let continue_button = Button::new("Continue");
 
         Self {
@@ -83,6 +101,8 @@ impl ConfigurationScreen {
             password_input,
             password_confirm_input,
             timezone_selector,
+            keymap_selector,
+            locale_selector,
             continue_button,
             focused_field: FocusedField::Hostname,
             error_message: None,
@@ -105,11 +125,15 @@ impl ConfigurationScreen {
         disk_size: u64,
         swap_size_gb: u64,
         root_filesystem: String,
+        luks_encryption: bool,
+        luks_passphrase: String,
     ) {
         self.config.disk_path = disk_path;
         self.config.disk_size = disk_size;
         self.config.swap_size_gb = swap_size_gb;
         self.config.root_filesystem = root_filesystem;
+        self.config.luks_encryption = luks_encryption;
+        self.config.luks_passphrase = luks_passphrase;
     }
 
     /// Get the current configuration
@@ -125,7 +149,9 @@ impl ConfigurationScreen {
             FocusedField::Username => FocusedField::Password,
             FocusedField::Password => FocusedField::PasswordConfirm,
             FocusedField::PasswordConfirm => FocusedField::Timezone,
-            FocusedField::Timezone => FocusedField::ContinueButton,
+            FocusedField::Timezone => FocusedField::Keymap,
+            FocusedField::Keymap => FocusedField::Locale,
+            FocusedField::Locale => FocusedField::ContinueButton,
             FocusedField::ContinueButton => FocusedField::Hostname,
         };
         self.set_focus();
@@ -140,7 +166,9 @@ impl ConfigurationScreen {
             FocusedField::Password => FocusedField::Username,
             FocusedField::PasswordConfirm => FocusedField::Password,
             FocusedField::Timezone => FocusedField::PasswordConfirm,
-            FocusedField::ContinueButton => FocusedField::Timezone,
+            FocusedField::Keymap => FocusedField::Timezone,
+            FocusedField::Locale => FocusedField::Keymap,
+            FocusedField::ContinueButton => FocusedField::Locale,
         };
         self.set_focus();
     }
@@ -152,6 +180,8 @@ impl ConfigurationScreen {
         self.password_input.set_focused(false);
         self.password_confirm_input.set_focused(false);
         self.timezone_selector.set_focused(false);
+        self.keymap_selector.set_focused(false);
+        self.locale_selector.set_focused(false);
         self.continue_button.set_focused(false);
     }
 
@@ -163,6 +193,8 @@ impl ConfigurationScreen {
             FocusedField::Password => self.password_input.set_focused(true),
             FocusedField::PasswordConfirm => self.password_confirm_input.set_focused(true),
             FocusedField::Timezone => self.timezone_selector.set_focused(true),
+            FocusedField::Keymap => self.keymap_selector.set_focused(true),
+            FocusedField::Locale => self.locale_selector.set_focused(true),
             FocusedField::ContinueButton => self.continue_button.set_focused(true),
         }
     }
@@ -174,6 +206,12 @@ impl ConfigurationScreen {
         self.config.user.password = self.password_input.value().to_string();
         if let Some(timezone) = self.timezone_selector.selected_value() {
             self.config.timezone = timezone.clone();
+        }
+        if let Some(keymap) = self.keymap_selector.selected_value() {
+            self.config.keymap = keymap.clone();
+        }
+        if let Some(locale) = self.locale_selector.selected_value() {
+            self.config.locale = locale.clone();
         }
     }
 
@@ -209,14 +247,15 @@ impl Screen for ConfigurationScreen {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Instructions
+                Constraint::Length(2),  // Instructions
                 Constraint::Length(3),  // Hostname
                 Constraint::Length(3),  // Username
                 Constraint::Length(3),  // Password
                 Constraint::Length(3),  // Confirm password
-                Constraint::Length(10), // Timezone selector
+                Constraint::Length(8),  // Timezone selector
+                Constraint::Length(8),  // Keymap selector
+                Constraint::Length(8),  // Locale selector
                 Constraint::Length(3),  // Continue button
-                Constraint::Length(6),  // Summary info (reduced)
                 Constraint::Length(3),  // Error/status
                 Constraint::Min(0),     // Spacer
                 Constraint::Length(3),  // Navigation
@@ -238,45 +277,11 @@ impl Screen for ConfigurationScreen {
         self.password_input.render(frame, chunks[3]);
         self.password_confirm_input.render(frame, chunks[4]);
         self.timezone_selector.render(frame, chunks[5]);
+        self.keymap_selector.render(frame, chunks[6]);
+        self.locale_selector.render(frame, chunks[7]);
 
         // Continue button
-        self.continue_button.render(frame, chunks[6]);
-
-        // Summary info
-        let summary_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Additional Settings ")
-            .border_style(self.theme.border_style());
-
-        // Format disk size in human-readable format
-        let disk_size_human = if self.config.disk_size > 0 {
-            format!("{:.1} GB", self.config.disk_size as f64 / 1_000_000_000.0)
-        } else {
-            "Not set".to_string()
-        };
-
-        let summary_lines = vec![
-            Line::from(vec![
-                Span::styled("Disk: ", self.theme.text_muted()),
-                Span::styled(&self.config.disk_path, self.theme.text()),
-                Span::styled(format!(" ({})", disk_size_human), self.theme.text_muted()),
-            ]),
-            Line::from(vec![
-                Span::styled("Swap: ", self.theme.text_muted()),
-                Span::styled(format!("{} GB", self.config.swap_size_gb), self.theme.text()),
-            ]),
-            Line::from(vec![
-                Span::styled("Root FS: ", self.theme.text_muted()),
-                Span::styled(&self.config.root_filesystem, self.theme.text()),
-            ]),
-            Line::from(vec![
-                Span::styled("Bootloader: ", self.theme.text_muted()),
-                Span::styled(self.config.bootloader.as_str(), self.theme.text()),
-            ]),
-        ];
-
-        let summary_para = Paragraph::new(summary_lines).block(summary_block);
-        frame.render_widget(summary_para, chunks[7]);
+        self.continue_button.render(frame, chunks[8]);
 
         // Error message or status
         if let Some(ref error) = self.error_message {
@@ -288,7 +293,7 @@ impl Screen for ConfigurationScreen {
                 .block(error_block)
                 .style(self.theme.error())
                 .alignment(ratatui::layout::Alignment::Center);
-            frame.render_widget(error_para, chunks[8]);
+            frame.render_widget(error_para, chunks[9]);
         }
 
         // Navigation hints
@@ -301,7 +306,7 @@ impl Screen for ConfigurationScreen {
                 ("Esc", "Back / Quit"),
             ],
             &self.theme,
-            chunks[10],
+            chunks[11],
         );
     }
 
@@ -312,6 +317,8 @@ impl Screen for ConfigurationScreen {
             && !self.password_input.is_focused()
             && !self.password_confirm_input.is_focused()
             && !self.timezone_selector.is_focused()
+            && !self.keymap_selector.is_focused()
+            && !self.locale_selector.is_focused()
         {
             if let Some(action) = self.handle_standard_input(key) {
                 return action;
@@ -342,13 +349,17 @@ impl Screen for ConfigurationScreen {
                 self.focus_next();
                 ScreenAction::None
             }
-            KeyCode::Down if !self.timezone_selector.is_focused() => {
-                // Only use Down for navigation if not in timezone selector
+            KeyCode::Down if !self.timezone_selector.is_focused()
+                && !self.keymap_selector.is_focused()
+                && !self.locale_selector.is_focused() => {
+                // Only use Down for navigation if not in a selector
                 self.focus_next();
                 ScreenAction::None
             }
-            KeyCode::Up if !self.timezone_selector.is_focused() => {
-                // Only use Up for navigation if not in timezone selector
+            KeyCode::Up if !self.timezone_selector.is_focused()
+                && !self.keymap_selector.is_focused()
+                && !self.locale_selector.is_focused() => {
+                // Only use Up for navigation if not in a selector
                 self.focus_previous();
                 ScreenAction::None
             }
@@ -389,7 +400,14 @@ impl Screen for ConfigurationScreen {
                         }
                         FocusedField::Timezone => {
                             self.timezone_selector.handle_input(event);
-                            // Update config in real-time
+                            self.update_config();
+                        }
+                        FocusedField::Keymap => {
+                            self.keymap_selector.handle_input(event);
+                            self.update_config();
+                        }
+                        FocusedField::Locale => {
+                            self.locale_selector.handle_input(event);
                             self.update_config();
                         }
                         FocusedField::ContinueButton => {
@@ -435,15 +453,17 @@ impl Screen for ConfigurationScreen {
             "  - Press Esc to clear filter".to_string(),
             "  - Default: America/New_York".to_string(),
             "".to_string(),
-            "- Bootloader: Automatically selected based on boot mode".to_string(),
-            "  - UEFI systems use systemd-boot".to_string(),
-            "  - BIOS systems use GRUB".to_string(),
+            "- Keyboard Layout: Select your console keymap".to_string(),
+            "  - Type to filter (e.g., 'german', 'french', 'dvorak')".to_string(),
+            "  - Default: us".to_string(),
             "".to_string(),
-            "- Locale: en_US.UTF-8 (default)".to_string(),
+            "- Locale: Select your system locale".to_string(),
+            "  - Type to filter (e.g., 'german', 'french', 'japanese')".to_string(),
+            "  - Default: en_US.UTF-8".to_string(),
             "".to_string(),
             "## Keyboard Shortcuts".to_string(),
             "".to_string(),
-            "- ↑↓: Navigate between fields (or within timezone list)".to_string(),
+            "- ↑↓: Navigate between fields (or within selector lists)".to_string(),
             "- ←→: Navigate to previous/next field (works everywhere)".to_string(),
             "- Tab / Shift+Tab: Also navigate fields".to_string(),
             "- Enter: Move to next field (or submit from Continue button)".to_string(),
@@ -555,6 +575,8 @@ mod tests {
             1_000_000_000_000,
             16,
             "btrfs".to_string(),
+            true,
+            "mypassphrase".to_string(),
         );
 
         // Verify config was updated
@@ -562,5 +584,7 @@ mod tests {
         assert_eq!(screen.config.disk_size, 1_000_000_000_000);
         assert_eq!(screen.config.swap_size_gb, 16);
         assert_eq!(screen.config.root_filesystem, "btrfs");
+        assert!(screen.config.luks_encryption);
+        assert_eq!(screen.config.luks_passphrase, "mypassphrase");
     }
 }

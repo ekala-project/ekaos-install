@@ -9,6 +9,7 @@ use ratatui::{
 };
 use tracing::{debug, warn};
 
+use crate::nixos::disk::detect_disks;
 use crate::system::{check_network, detect_boot_mode, is_nixos, is_root, BootMode};
 use crate::ui::{
     components::{Button, Component, Focusable},
@@ -274,10 +275,22 @@ impl Screen for WelcomeScreen {
             }
         }
 
-        // Check 4: Disk space (placeholder - will be implemented properly later)
-        // For now, assume true in mock mode or if we made it this far
-        self.checks.disk_space = true;
-        debug!("Disk space check: {}", self.checks.disk_space);
+        // Check 4: Sufficient disk space (at least one installable disk exists)
+        match detect_disks() {
+            Ok(disks) => {
+                self.checks.disk_space = disks.iter().any(|d| d.is_installable());
+                debug!(
+                    "Disk space check: {} ({} disks found, {} installable)",
+                    self.checks.disk_space,
+                    disks.len(),
+                    disks.iter().filter(|d| d.is_installable()).count()
+                );
+            }
+            Err(e) => {
+                warn!("Disk detection failed: {}", e);
+                self.checks.disk_space = false;
+            }
+        }
 
         debug!(
             "Pre-flight checks complete: root={}, network={}, nixos={}, disk={}",
@@ -375,23 +388,29 @@ mod tests {
 
     #[test]
     fn test_preflight_checks() {
-        let screen = WelcomeScreen::new(false, false);
+        std::env::set_var("EKAOS_MOCK", "1");
+        let mut screen = WelcomeScreen::new(true, false);
+        screen.on_enter();
         assert!(screen.all_checks_passed());
         assert!(screen.can_proceed());
+        std::env::remove_var("EKAOS_MOCK");
     }
 
     #[test]
     fn test_navigation() {
-        let mut screen = WelcomeScreen::new(false, false);
+        std::env::set_var("EKAOS_MOCK", "1");
+        let mut screen = WelcomeScreen::new(true, false);
+        screen.on_enter(); // Sets up button focus and runs checks in mock mode
 
         // Can't go back from welcome
         assert!(!screen.can_go_back());
 
-        // Enter should proceed when checks pass
+        // Enter should proceed when checks pass and button is focused
         assert_eq!(screen.handle_input(KeyCode::Enter), ScreenAction::Next);
 
         // q should exit
         assert_eq!(screen.handle_input(KeyCode::Char('q')), ScreenAction::Exit);
+        std::env::remove_var("EKAOS_MOCK");
     }
 
     #[test]

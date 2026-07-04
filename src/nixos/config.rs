@@ -44,9 +44,10 @@ pub fn generate_configuration(config: &InstallConfig) -> Result<String, Installe
         }
         BootLoader::Grub => {
             nix_config.push_str("  boot.loader.grub.enable = true;\n");
-            nix_config.push_str(
-                "  boot.loader.grub.device = \"/dev/sda\"; # Update this to match your disk\n",
-            );
+            nix_config.push_str(&format!(
+                "  boot.loader.grub.device = \"{}\";\n",
+                config.disk_path
+            ));
             nix_config.push_str("  # boot.loader.grub.efiSupport = true; # Uncomment for UEFI\n");
             nix_config.push_str(
                 "  # boot.loader.efi.canTouchEfiVariables = true; # Uncomment for UEFI\n",
@@ -54,6 +55,30 @@ pub fn generate_configuration(config: &InstallConfig) -> Result<String, Installe
         }
     }
     nix_config.push_str("\n");
+
+    // LUKS encryption configuration
+    if config.luks_encryption {
+        nix_config.push_str("  # LUKS disk encryption\n");
+        nix_config.push_str("  boot.initrd.luks.devices.cryptroot = {\n");
+        // The LUKS partition is partition 2 on UEFI (after ESP), partition 1 on BIOS
+        let luks_partition = match config.bootloader {
+            BootLoader::SystemdBoot => format!("{}p2", config.disk_path),
+            BootLoader::Grub => format!("{}1", config.disk_path),
+        };
+        // Handle NVMe naming (nvme0n1p2 vs sda2)
+        let luks_device = if config.disk_path.contains("nvme") || config.disk_path.contains("mmcblk") {
+            luks_partition
+        } else {
+            match config.bootloader {
+                BootLoader::SystemdBoot => format!("{}2", config.disk_path),
+                BootLoader::Grub => format!("{}1", config.disk_path),
+            }
+        };
+        nix_config.push_str(&format!("    device = \"{}\";\n", luks_device));
+        nix_config.push_str("    preLVM = true;\n");
+        nix_config.push_str("    allowDiscards = true;\n");
+        nix_config.push_str("  };\n\n");
+    }
 
     // Networking configuration
     nix_config.push_str("  # Networking configuration\n");
@@ -170,6 +195,8 @@ mod tests {
             disk_size: 500_000_000_000,
             swap_size_gb: 8,
             root_filesystem: "ext4".to_string(),
+            luks_encryption: false,
+            luks_passphrase: String::new(),
         }
     }
 
@@ -202,8 +229,22 @@ mod tests {
 
         let nix_config = result.unwrap();
         assert!(nix_config.contains("boot.loader.grub.enable = true"));
-        assert!(nix_config.contains("boot.loader.grub.device"));
+        assert!(nix_config.contains("boot.loader.grub.device = \"/dev/sda\""));
         assert!(!nix_config.contains("boot.loader.systemd-boot"));
+    }
+
+    #[test]
+    fn test_generate_configuration_grub_uses_selected_disk() {
+        let mut config = create_test_config();
+        config.bootloader = BootLoader::Grub;
+        config.disk_path = "/dev/nvme0n1".to_string();
+
+        let result = generate_configuration(&config);
+        assert!(result.is_ok());
+
+        let nix_config = result.unwrap();
+        assert!(nix_config.contains("boot.loader.grub.device = \"/dev/nvme0n1\""));
+        assert!(!nix_config.contains("/dev/sda"));
     }
 
     #[test]
@@ -253,5 +294,47 @@ mod tests {
         assert!(nix_config.ends_with("}\n"));
         assert!(nix_config.contains("imports = ["));
         assert!(nix_config.contains("system.stateVersion"));
+    }
+
+    #[test]
+    fn test_generate_configuration_luks_encryption() {
+        let mut config = create_test_config();
+        config.luks_encryption = true;
+        config.luks_passphrase = "securepass123".to_string();
+
+        let result = generate_configuration(&config);
+        assert!(result.is_ok());
+
+        let nix_config = result.unwrap();
+        assert!(nix_config.contains("boot.initrd.luks.devices.cryptroot"));
+        assert!(nix_config.contains("preLVM = true"));
+        assert!(nix_config.contains("allowDiscards = true"));
+        // For /dev/sda with systemd-boot, device should be /dev/sda2
+        assert!(nix_config.contains("device = \"/dev/sda2\""));
+    }
+
+    #[test]
+    fn test_generate_configuration_luks_nvme() {
+        let mut config = create_test_config();
+        config.luks_encryption = true;
+        config.luks_passphrase = "securepass123".to_string();
+        config.disk_path = "/dev/nvme0n1".to_string();
+
+        let result = generate_configuration(&config);
+        assert!(result.is_ok());
+
+        let nix_config = result.unwrap();
+        // NVMe uses 'p' separator for partitions
+        assert!(nix_config.contains("device = \"/dev/nvme0n1p2\""));
+    }
+
+    #[test]
+    fn test_generate_configuration_no_luks() {
+        let config = create_test_config();
+        let result = generate_configuration(&config);
+        assert!(result.is_ok());
+
+        let nix_config = result.unwrap();
+        assert!(!nix_config.contains("luks"));
     }
 }
