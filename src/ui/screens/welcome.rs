@@ -2,15 +2,15 @@
 
 use crossterm::event::KeyCode;
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 use tracing::{debug, warn};
 
 use crate::nixos::disk::detect_disks;
-use crate::system::{check_network, detect_boot_mode, is_nixos, is_root, BootMode};
+use crate::system::{BootMode, check_network, detect_boot_mode, is_nixos, is_root};
 use crate::ui::{
     components::{Button, Component, Focusable},
     icons,
@@ -189,7 +189,11 @@ impl Screen for WelcomeScreen {
         // Navigation hints
         render_navigation_hints(
             frame,
-            &[("Enter", "Submit from button"), ("?", "Help"), ("q", "Quit")],
+            &[
+                ("Enter", "Submit from button"),
+                ("?", "Help"),
+                ("q", "Quit"),
+            ],
             &self.theme,
             chunks[9],
         );

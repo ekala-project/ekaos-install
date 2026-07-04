@@ -8,11 +8,11 @@
 //! - Focus management
 
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 
 use super::{Component, Focusable, InputEvent, Interactive, Validatable};

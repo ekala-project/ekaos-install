@@ -4,16 +4,16 @@
 
 use crossterm::event::KeyCode;
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
-    Frame,
 };
 use std::sync::mpsc::Receiver;
 
 use crate::config::InstallConfig;
-use crate::nixos::{run_installation_async, InstallMessage, InstallProgress, InstallStage};
+use crate::nixos::{InstallMessage, InstallProgress, InstallStage, run_installation_async};
 use crate::ui::{
     components::{Component, ProgressBar},
     theme::AppTheme,
@@ -107,9 +107,12 @@ impl InstallationScreen {
 
     /// Retry the installation after a failure
     fn retry_installation(&mut self) {
-        if let (Some(config), Some(root_path)) = (self.last_config.clone(), self.last_root_path.clone()) {
+        if let (Some(config), Some(root_path)) =
+            (self.last_config.clone(), self.last_root_path.clone())
+        {
             self.log_lines.push("".to_string());
-            self.log_lines.push("=== Retrying installation ===".to_string());
+            self.log_lines
+                .push("=== Retrying installation ===".to_string());
 
             let rx = run_installation_async(config, root_path, self.is_mock);
             self.receiver = Some(rx);
@@ -138,13 +141,15 @@ impl InstallationScreen {
                     InstallMessage::Success => {
                         self.is_running = false;
                         self.is_complete = true;
-                        self.log_lines.push("✓ Installation completed successfully!".to_string());
+                        self.log_lines
+                            .push("✓ Installation completed successfully!".to_string());
                     }
                     InstallMessage::Error(err) => {
                         self.is_running = false;
                         self.has_error = true;
                         self.error_message = Some(err.clone());
-                        self.log_lines.push(format!("✗ Installation failed: {}", err));
+                        self.log_lines
+                            .push(format!("✗ Installation failed: {}", err));
                     }
                 }
             }
@@ -173,7 +178,9 @@ impl InstallationScreen {
                 InstallStage::GeneratingHardwareConfig => {
                     "Detecting hardware configuration...".to_string()
                 }
-                InstallStage::Installing => "Installing NixOS (this may take a while)...".to_string(),
+                InstallStage::Installing => {
+                    "Installing NixOS (this may take a while)...".to_string()
+                }
                 InstallStage::Verifying => "Verifying installation...".to_string(),
                 InstallStage::Complete => "Installation complete!".to_string(),
                 InstallStage::Failed(ref err) => format!("Installation failed: {}", err),
@@ -207,12 +214,12 @@ impl Screen for InstallationScreen {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),  // Title
-                Constraint::Length(4),  // Progress bar
-                Constraint::Length(3),  // Current operation
-                Constraint::Length(3),  // Tip
-                Constraint::Min(8),     // Log output
-                Constraint::Length(3),  // Status/Navigation
+                Constraint::Length(3), // Title
+                Constraint::Length(4), // Progress bar
+                Constraint::Length(3), // Current operation
+                Constraint::Length(3), // Tip
+                Constraint::Min(8),    // Log output
+                Constraint::Length(3), // Status/Navigation
             ])
             .split(area);
 
@@ -245,8 +252,8 @@ impl Screen for InstallationScreen {
 
         // Progress bar
         let percent = self.progress.as_ref().map(|p| p.percent).unwrap_or(0);
-        let mut progress_bar = ProgressBar::new(percent as u16)
-            .with_label(format!("Progress: {}%", percent));
+        let mut progress_bar =
+            ProgressBar::new(percent as u16).with_label(format!("Progress: {}%", percent));
 
         if self.has_error {
             progress_bar = progress_bar.with_color(self.theme.error);

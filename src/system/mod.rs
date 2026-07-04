@@ -8,7 +8,7 @@ pub mod command;
 pub mod detection;
 pub mod network;
 
-pub use bootmode::{detect_boot_mode, BootMode};
+pub use bootmode::{BootMode, detect_boot_mode};
 pub use command::{CommandExecutor, MockExecutor, RealExecutor};
-pub use detection::{detect_system, is_nixos, is_root, SystemInfo};
-pub use network::{check_network, check_network_with_timeout, NetworkStatus};
+pub use detection::{SystemInfo, detect_system, is_nixos, is_root};
+pub use network::{NetworkStatus, check_network, check_network_with_timeout};

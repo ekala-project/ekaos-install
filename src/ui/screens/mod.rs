@@ -3,7 +3,7 @@
 //! Each screen represents a step in the installation process.
 
 use crossterm::event::KeyCode;
-use ratatui::{layout::Rect, Frame};
+use ratatui::{Frame, layout::Rect};
 
 pub mod configuration;
 pub mod confirmation;

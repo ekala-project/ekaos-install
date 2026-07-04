@@ -67,14 +67,15 @@ pub fn generate_configuration(config: &InstallConfig) -> Result<String, Installe
             BootLoader::Grub => format!("{}1", config.disk_path),
         };
         // Handle NVMe naming (nvme0n1p2 vs sda2)
-        let luks_device = if config.disk_path.contains("nvme") || config.disk_path.contains("mmcblk") {
-            luks_partition
-        } else {
-            match config.bootloader {
-                BootLoader::SystemdBoot => format!("{}2", config.disk_path),
-                BootLoader::Grub => format!("{}1", config.disk_path),
-            }
-        };
+        let luks_device =
+            if config.disk_path.contains("nvme") || config.disk_path.contains("mmcblk") {
+                luks_partition
+            } else {
+                match config.bootloader {
+                    BootLoader::SystemdBoot => format!("{}2", config.disk_path),
+                    BootLoader::Grub => format!("{}1", config.disk_path),
+                }
+            };
         nix_config.push_str(&format!("    device = \"{}\";\n", luks_device));
         nix_config.push_str("    preLVM = true;\n");
         nix_config.push_str("    allowDiscards = true;\n");

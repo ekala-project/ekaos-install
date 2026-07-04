@@ -7,20 +7,20 @@ use clap::Parser;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io;
 use tracing::{info, warn};
 
 use ekaos_install::{
+    APP_NAME, VERSION,
     app::{App, AppMode, Screen as AppScreen},
     ui::{
-        components::Component, render_footer, render_header, ConfigurationScreen,
-        ConfirmationScreen, DiskSelectionScreen, HelpPanel, InstallationScreen, Layout,
-        PartitionPlanningScreen, Screen, ScreenAction, SuccessScreen, WelcomeScreen,
+        ConfigurationScreen, ConfirmationScreen, DiskSelectionScreen, HelpPanel,
+        InstallationScreen, Layout, PartitionPlanningScreen, Screen, ScreenAction, SuccessScreen,
+        WelcomeScreen, components::Component, render_footer, render_header,
     },
-    APP_NAME, VERSION,
 };
 
 /// Command-line arguments
@@ -234,7 +234,11 @@ fn run_event_loop(
                 AppScreen::Installation => {
                     // Start installation with confirmed configuration
                     if let Some(config) = confirmation_screen.get_config() {
-                        installation_screen.start_installation(config.clone(), "/mnt".to_string(), app.is_mock());
+                        installation_screen.start_installation(
+                            config.clone(),
+                            "/mnt".to_string(),
+                            app.is_mock(),
+                        );
                     }
                     installation_screen.on_enter();
                 }

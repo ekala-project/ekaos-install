@@ -8,10 +8,10 @@ pub mod disk;
 pub mod install;
 
 pub use config::{generate_configuration, write_configuration};
-pub use disk::{detect_disks, Disk, DiskType, PartitionInfo};
+pub use disk::{Disk, DiskType, PartitionInfo, detect_disks};
 pub use install::{
-    run_installation_async, InstallExecutor, InstallMessage, InstallProgress, InstallStage,
-    MockInstallExecutor, RealInstallExecutor,
+    InstallExecutor, InstallMessage, InstallProgress, InstallStage, MockInstallExecutor,
+    RealInstallExecutor, run_installation_async,
 };
 
 // Placeholder for future modules

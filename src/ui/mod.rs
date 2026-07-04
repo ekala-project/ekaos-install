@@ -10,12 +10,12 @@ pub mod theme;
 pub mod utils;
 
 pub use components::{
-    Button, CheckboxList, ConfirmDialog, FilterableSelectList, HelpPanel, InputField,
-    MessageType, ProgressBar, SelectList, StatusMessage,
+    Button, CheckboxList, ConfirmDialog, FilterableSelectList, HelpPanel, InputField, MessageType,
+    ProgressBar, SelectList, StatusMessage,
 };
-pub use layout::{render_footer, render_header, Layout};
+pub use layout::{Layout, render_footer, render_header};
 pub use screens::{
     ConfigurationScreen, ConfirmationScreen, DiskSelectionScreen, InstallationScreen,
     PartitionPlanningScreen, Screen, ScreenAction, SuccessScreen, WelcomeScreen,
 };
-pub use theme::{icons, spacing, AppTheme};
+pub use theme::{AppTheme, icons, spacing};

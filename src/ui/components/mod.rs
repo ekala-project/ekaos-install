@@ -3,8 +3,8 @@
 //! This module contains all reusable UI components used throughout the application.
 //! Components follow a consistent pattern with support for focus, validation, and keyboard input.
 
-use ratatui::layout::Rect;
 use ratatui::Frame;
+use ratatui::layout::Rect;
 
 pub mod button;
 pub mod checkbox;

@@ -3,11 +3,11 @@
 //! Interactive button widget with focus and click support
 
 use ratatui::{
+    Frame,
     layout::{Alignment, Rect},
     style::{Color, Modifier, Style},
     text::Line,
     widgets::{Block, Borders, Paragraph},
-    Frame,
 };
 
 use super::{Component, Focusable, InputEvent, Interactive};
