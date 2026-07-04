@@ -29,6 +29,10 @@ pub struct InstallConfig {
     pub swap_size_gb: u64,
     /// Root filesystem type (e.g., "ext4", "btrfs", "xfs", "zfs")
     pub root_filesystem: String,
+    /// Whether to encrypt the root partition with LUKS
+    pub luks_encryption: bool,
+    /// LUKS encryption passphrase (only used if luks_encryption is true)
+    pub luks_passphrase: String,
 }
 
 /// User account configuration
@@ -90,6 +94,8 @@ impl Default for InstallConfig {
             disk_size: 0,
             swap_size_gb: 8,
             root_filesystem: "ext4".to_string(),
+            luks_encryption: false,
+            luks_passphrase: String::new(),
         }
     }
 }
@@ -138,6 +144,16 @@ impl InstallConfig {
 
         if self.user.password.len() < 6 {
             return Err("Password must be at least 6 characters".to_string());
+        }
+
+        // Validate LUKS passphrase if encryption is enabled
+        if self.luks_encryption {
+            if self.luks_passphrase.is_empty() {
+                return Err("Encryption passphrase cannot be empty".to_string());
+            }
+            if self.luks_passphrase.len() < 8 {
+                return Err("Encryption passphrase must be at least 8 characters".to_string());
+            }
         }
 
         Ok(())
@@ -214,5 +230,29 @@ mod tests {
 
         config.user.password = "short".to_string();
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_luks_validation() {
+        let mut config = InstallConfig::default();
+        config.user.username = "testuser".to_string();
+        config.user.password = "password123".to_string();
+
+        // No encryption - should pass without passphrase
+        config.luks_encryption = false;
+        assert!(config.validate().is_ok());
+
+        // Encryption enabled but empty passphrase - should fail
+        config.luks_encryption = true;
+        config.luks_passphrase = "".to_string();
+        assert!(config.validate().is_err());
+
+        // Encryption enabled but short passphrase - should fail
+        config.luks_passphrase = "short".to_string();
+        assert!(config.validate().is_err());
+
+        // Encryption enabled with valid passphrase - should pass
+        config.luks_passphrase = "longenoughpassphrase".to_string();
+        assert!(config.validate().is_ok());
     }
 }

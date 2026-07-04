@@ -71,6 +71,16 @@ pub struct PartitionPlanningScreen {
     focus_mode: FocusMode,
     /// Selected field within partition (when in edit mode)
     selected_field: Option<EditableField>,
+    /// Whether to encrypt the root partition with LUKS
+    luks_enabled: bool,
+    /// LUKS passphrase input field
+    luks_passphrase_input: InputField,
+    /// LUKS passphrase confirm input field
+    luks_passphrase_confirm_input: InputField,
+    /// Whether the LUKS passphrase field is focused
+    luks_focused: bool,
+    /// Which LUKS field is focused (0 = passphrase, 1 = confirm)
+    luks_field_idx: usize,
 }
 
 /// Partition information
@@ -107,6 +117,9 @@ impl PartitionPlanningScreen {
         swap_input.set_value("8");
         swap_input.set_focused(false);
 
+        let luks_passphrase_input = InputField::new("Encryption Passphrase").password();
+        let luks_passphrase_confirm_input = InputField::new("Confirm Passphrase").password();
+
         Self {
             theme: AppTheme::new(),
             boot_mode: BootMode::Unknown,
@@ -119,6 +132,11 @@ impl PartitionPlanningScreen {
             selected_partition_idx: 0,
             focus_mode: FocusMode::PartitionList,
             selected_field: None,
+            luks_enabled: false,
+            luks_passphrase_input,
+            luks_passphrase_confirm_input,
+            luks_focused: false,
+            luks_field_idx: 0,
         }
     }
 
@@ -250,6 +268,16 @@ impl PartitionPlanningScreen {
     /// Get the selected disk size in bytes
     pub fn disk_size(&self) -> u64 {
         self.disk_size
+    }
+
+    /// Get whether LUKS encryption is enabled
+    pub fn luks_enabled(&self) -> bool {
+        self.luks_enabled
+    }
+
+    /// Get the LUKS passphrase
+    pub fn luks_passphrase(&self) -> &str {
+        self.luks_passphrase_input.value()
     }
 
     /// Get the selected root filesystem type
@@ -465,15 +493,17 @@ impl Default for PartitionPlanningScreen {
 
 impl Screen for PartitionPlanningScreen {
     fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        let encryption_height = if self.luks_enabled { 6 } else { 3 };
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(5),  // Disk info
-                Constraint::Length(9),  // Visual disk allocation bar
-                Constraint::Length(5),  // Swap size input
-                Constraint::Min(8),     // Partition list (smaller)
-                Constraint::Length(5),  // Summary
-                Constraint::Length(3),  // Navigation hints
+                Constraint::Length(5),               // Disk info
+                Constraint::Length(9),               // Visual disk allocation bar
+                Constraint::Length(5),               // Swap size input
+                Constraint::Length(encryption_height), // Encryption toggle + passphrase
+                Constraint::Min(8),                  // Partition list (smaller)
+                Constraint::Length(5),               // Summary
+                Constraint::Length(3),               // Navigation hints
             ])
             .split(area);
 
@@ -549,6 +579,53 @@ impl Screen for PartitionPlanningScreen {
         )))
         .alignment(ratatui::layout::Alignment::Center);
         frame.render_widget(help_para, input_layout[2]);
+
+        // Encryption section
+        let encrypt_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Disk Encryption ")
+            .border_style(if self.luks_focused {
+                self.theme.border_focused_style()
+            } else {
+                self.theme.border_style()
+            });
+
+        if self.luks_enabled {
+            let encrypt_inner = encrypt_block.inner(chunks[3]);
+            frame.render_widget(encrypt_block, chunks[3]);
+
+            let encrypt_layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(1), // Toggle line
+                    Constraint::Length(1), // Passphrase
+                    Constraint::Length(1), // Confirm
+                    Constraint::Min(0),
+                ])
+                .split(encrypt_inner);
+
+            let toggle_line = Line::from(vec![
+                Span::styled("  [x] ", self.theme.success()),
+                Span::styled("Encrypt root partition (LUKS)", self.theme.text()),
+                Span::styled("    Press 'e' to toggle", self.theme.text_muted()),
+            ]);
+            frame.render_widget(Paragraph::new(toggle_line), encrypt_layout[0]);
+
+            self.luks_passphrase_input.set_focused(self.luks_focused && self.luks_field_idx == 0);
+            Component::render(&mut self.luks_passphrase_input, frame, encrypt_layout[1]);
+            self.luks_passphrase_confirm_input.set_focused(self.luks_focused && self.luks_field_idx == 1);
+            Component::render(&mut self.luks_passphrase_confirm_input, frame, encrypt_layout[2]);
+        } else {
+            let toggle_lines = vec![
+                Line::from(vec![
+                    Span::styled("  [ ] ", self.theme.text_muted()),
+                    Span::styled("Encrypt root partition (LUKS)", self.theme.text()),
+                    Span::styled("    Press 'e' to toggle", self.theme.text_muted()),
+                ]),
+            ];
+            let encrypt_para = Paragraph::new(toggle_lines).block(encrypt_block);
+            frame.render_widget(encrypt_para, chunks[3]);
+        }
 
         // Partition list - hierarchical display with cursor
         let mut partition_lines: Vec<Line> = Vec::new();
@@ -663,7 +740,7 @@ impl Screen for PartitionPlanningScreen {
                 .border_style(self.theme.border_style()),
         );
 
-        frame.render_widget(partition_para, chunks[3]);
+        frame.render_widget(partition_para, chunks[4]);
 
         // Summary
         let summary_block = Block::default()
@@ -689,7 +766,7 @@ impl Screen for PartitionPlanningScreen {
         let summary_para = Paragraph::new(summary_text)
             .block(summary_block)
             .alignment(ratatui::layout::Alignment::Center);
-        frame.render_widget(summary_para, chunks[4]);
+        frame.render_widget(summary_para, chunks[5]);
 
         // Navigation hints - context-sensitive based on focus mode
         let hints = match self.focus_mode {
@@ -721,13 +798,17 @@ impl Screen for PartitionPlanningScreen {
             }
         };
 
-        render_navigation_hints(frame, &hints, &self.theme, chunks[5]);
+        render_navigation_hints(frame, &hints, &self.theme, chunks[6]);
     }
 
     fn handle_input(&mut self, key: KeyCode) -> ScreenAction {
         // Handle Escape specially based on mode
         if key == KeyCode::Esc {
-            if self.swap_focused {
+            if self.luks_focused {
+                // Exit LUKS passphrase input
+                self.luks_focused = false;
+                return ScreenAction::None;
+            } else if self.swap_focused {
                 // Exit swap input field
                 self.swap_focused = false;
                 self.swap_input.set_focused(false);
@@ -748,8 +829,41 @@ impl Screen for PartitionPlanningScreen {
             return action;
         }
 
+        // If LUKS passphrase input is focused, handle that separately
+        if self.luks_focused {
+            match key {
+                KeyCode::Tab | KeyCode::Enter => {
+                    if self.luks_field_idx == 0 {
+                        // Move to confirm field
+                        self.luks_field_idx = 1;
+                    } else {
+                        // Exit LUKS input
+                        self.luks_focused = false;
+                    }
+                    ScreenAction::None
+                }
+                KeyCode::BackTab => {
+                    if self.luks_field_idx == 1 {
+                        self.luks_field_idx = 0;
+                    } else {
+                        self.luks_focused = false;
+                    }
+                    ScreenAction::None
+                }
+                _ => {
+                    if let Some(event) = keycode_to_input_event(key) {
+                        if self.luks_field_idx == 0 {
+                            Interactive::handle_input(&mut self.luks_passphrase_input, event);
+                        } else {
+                            Interactive::handle_input(&mut self.luks_passphrase_confirm_input, event);
+                        }
+                    }
+                    ScreenAction::None
+                }
+            }
+        }
         // If swap input field is focused, handle that separately
-        if self.swap_focused {
+        else if self.swap_focused {
             match key {
                 KeyCode::Up => {
                     // Increment swap by 1 GB
@@ -807,6 +921,20 @@ impl Screen for PartitionPlanningScreen {
                             // Quick access to swap size input (backward compatibility)
                             self.swap_focused = true;
                             self.swap_input.set_focused(true);
+                            ScreenAction::None
+                        }
+                        KeyCode::Char('e') => {
+                            // Toggle encryption
+                            self.luks_enabled = !self.luks_enabled;
+                            if self.luks_enabled {
+                                // Focus the passphrase field
+                                self.luks_focused = true;
+                                self.luks_field_idx = 0;
+                            } else {
+                                self.luks_focused = false;
+                                self.luks_passphrase_input.set_value("");
+                                self.luks_passphrase_confirm_input.set_value("");
+                            }
                             ScreenAction::None
                         }
                         _ => ScreenAction::None,

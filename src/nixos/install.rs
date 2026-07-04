@@ -385,6 +385,8 @@ mod tests {
             disk_size: 500_000_000_000,
             swap_size_gb: 8,
             root_filesystem: "ext4".to_string(),
+            luks_encryption: false,
+            luks_passphrase: String::new(),
         }
     }
 
