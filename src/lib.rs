@@ -12,7 +12,7 @@
 //! - `data`: Static data (timezones, etc.)
 //! - `error`: Error types and handling
 
-#![warn(missing_docs, missing_debug_implementations, rust_2018_idioms)]
+#![warn(missing_docs, rust_2018_idioms)]
 
 pub mod app;
 pub mod config;

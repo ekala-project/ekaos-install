@@ -155,12 +155,19 @@ pub fn render_centered_message(frame: &mut Frame<'_>, area: Rect, lines: Vec<Lin
 /// Theme colors for the application
 #[derive(Debug, Clone, Copy)]
 pub struct Theme {
+    /// Primary accent color
     pub primary: Color,
+    /// Success/confirmation color
     pub success: Color,
+    /// Warning color
     pub warning: Color,
+    /// Error color
     pub error: Color,
+    /// Informational color
     pub info: Color,
+    /// Background color
     pub background: Color,
+    /// Foreground/text color
     pub foreground: Color,
 }
 
@@ -205,10 +212,15 @@ impl Theme {
 /// Theme color types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeColor {
+    /// Primary accent
     Primary,
+    /// Success/green
     Success,
+    /// Warning/yellow
     Warning,
+    /// Error/red
     Error,
+    /// Info/blue
     Info,
 }
 

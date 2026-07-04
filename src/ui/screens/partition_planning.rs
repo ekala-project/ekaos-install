@@ -94,8 +94,6 @@ struct Partition {
     fstype: String,
     /// Mount point
     mountpoint: String,
-    /// Description
-    description: String,
 }
 
 impl Partition {
@@ -180,21 +178,18 @@ impl PartitionPlanningScreen {
                 size: esp_size,
                 fstype: "FAT32".to_string(),
                 mountpoint: "/boot".to_string(),
-                description: "Required for UEFI boot".to_string(),
             },
             Partition {
                 label: "Root Partition".to_string(),
                 size: root_size,
                 fstype: "ext4".to_string(),
                 mountpoint: "/".to_string(),
-                description: "Main system partition".to_string(),
             },
             Partition {
                 label: "Swap Partition".to_string(),
                 size: swap_size,
                 fstype: "swap".to_string(),
                 mountpoint: "[swap]".to_string(),
-                description: "Virtual memory / hibernation".to_string(),
             },
         ];
     }
@@ -210,14 +205,12 @@ impl PartitionPlanningScreen {
                 size: root_size,
                 fstype: "ext4".to_string(),
                 mountpoint: "/".to_string(),
-                description: "Main system partition".to_string(),
             },
             Partition {
                 label: "Swap Partition".to_string(),
                 size: swap_size,
                 fstype: "swap".to_string(),
                 mountpoint: "[swap]".to_string(),
-                description: "Virtual memory / hibernation".to_string(),
             },
         ];
     }
@@ -638,7 +631,7 @@ impl Screen for PartitionPlanningScreen {
         }
 
         // Partition list - hierarchical display with cursor
-        let mut partition_lines: Vec<Line> = Vec::new();
+        let mut partition_lines: Vec<Line<'_>> = Vec::new();
         partition_lines.push(Line::from("")); // Top padding
 
         for (idx, partition) in self.partitions.iter().enumerate() {
@@ -1163,7 +1156,6 @@ mod tests {
             size: 512_000_000,
             fstype: "ext4".to_string(),
             mountpoint: "/".to_string(),
-            description: "Test".to_string(),
         };
         assert_eq!(part.size_human(), "512 MB");
 
@@ -1172,7 +1164,6 @@ mod tests {
             size: 8_000_000_000,
             fstype: "ext4".to_string(),
             mountpoint: "/".to_string(),
-            description: "Test".to_string(),
         };
         assert_eq!(part2.size_human(), "8.0 GB");
     }

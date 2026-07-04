@@ -296,7 +296,7 @@ impl Screen for InstallationScreen {
         let start_idx = self.scroll_position.saturating_sub(visible_lines / 2);
         let end_idx = (start_idx + visible_lines).min(self.log_lines.len());
 
-        let log_items: Vec<ListItem> = self.log_lines[start_idx..end_idx]
+        let log_items: Vec<ListItem<'_>> = self.log_lines[start_idx..end_idx]
             .iter()
             .map(|line| {
                 let style = if line.starts_with('✓') {
@@ -342,7 +342,7 @@ impl Screen for InstallationScreen {
 
     fn handle_input(&mut self, key: KeyCode) -> ScreenAction {
         // Handle quit only when installation is complete or has error
-        if (self.has_error || self.is_complete) {
+        if self.has_error || self.is_complete {
             if let Some(action) = self.handle_standard_input(key) {
                 return action;
             }

@@ -200,7 +200,7 @@ impl<T> Component for SelectList<T> {
             .title(self.title.as_str())
             .border_style(border_style);
 
-        let items: Vec<ListItem> = self
+        let items: Vec<ListItem<'_>> = self
             .items
             .iter()
             .enumerate()

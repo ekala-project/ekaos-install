@@ -73,7 +73,7 @@ impl Component for HelpPanel {
                     .add_modifier(Modifier::BOLD),
             );
 
-        let lines: Vec<Line> = self
+        let lines: Vec<Line<'_>> = self
             .content
             .iter()
             .map(|line| {
