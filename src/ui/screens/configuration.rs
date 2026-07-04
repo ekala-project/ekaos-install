@@ -5,7 +5,8 @@
 use crossterm::event::KeyCode;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    text::Line,
+    style::{Color, Style},
+    text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
@@ -14,7 +15,7 @@ use tracing::debug;
 use crate::config::{BootLoader, InstallConfig};
 use crate::data::keymaps::get_keymap_list;
 use crate::data::locales::get_locale_list;
-use crate::data::timezones::get_timezone_list;
+use crate::data::timezones::{detect_timezone, get_timezone_list};
 use crate::system::BootMode;
 use crate::ui::{
     components::{Button, Component, Focusable, FilterableSelectList, InputField, Interactive},
@@ -23,6 +24,28 @@ use crate::ui::{
 };
 
 use super::{Screen, ScreenAction};
+
+/// Evaluate password strength and return a label and color
+fn password_strength(password: &str) -> (&'static str, Color) {
+    let len = password.len();
+    let has_upper = password.chars().any(|c| c.is_uppercase());
+    let has_lower = password.chars().any(|c| c.is_lowercase());
+    let has_digit = password.chars().any(|c| c.is_ascii_digit());
+    let has_special = password.chars().any(|c| !c.is_alphanumeric());
+
+    let variety = [has_upper, has_lower, has_digit, has_special]
+        .iter()
+        .filter(|&&x| x)
+        .count();
+
+    if len >= 12 && variety >= 3 {
+        ("Strong ███████████", Color::Green)
+    } else if len >= 8 && variety >= 2 {
+        ("Medium ███████░░░░", Color::Yellow)
+    } else {
+        ("Weak   ███░░░░░░░░", Color::Red)
+    }
+}
 
 /// Configuration screen state
 pub struct ConfigurationScreen {
@@ -76,8 +99,9 @@ impl ConfigurationScreen {
             .collect();
         let mut timezone_selector = FilterableSelectList::new("Timezone")
             .with_items(timezone_items);
-        // Set default to America/New_York
-        timezone_selector.set_selected_by_label("America/New_York");
+        // Try to auto-detect timezone, fall back to America/New_York
+        let default_tz = detect_timezone().unwrap_or_else(|| "America/New_York".to_string());
+        timezone_selector.set_selected_by_label(&default_tz);
 
         // Create keymap selector
         let keymap_items = get_keymap_list();
@@ -251,6 +275,7 @@ impl Screen for ConfigurationScreen {
                 Constraint::Length(3),  // Hostname
                 Constraint::Length(3),  // Username
                 Constraint::Length(3),  // Password
+                Constraint::Length(1),  // Password strength
                 Constraint::Length(3),  // Confirm password
                 Constraint::Length(8),  // Timezone selector
                 Constraint::Length(8),  // Keymap selector
@@ -275,13 +300,27 @@ impl Screen for ConfigurationScreen {
         self.hostname_input.render(frame, chunks[1]);
         self.username_input.render(frame, chunks[2]);
         self.password_input.render(frame, chunks[3]);
-        self.password_confirm_input.render(frame, chunks[4]);
-        self.timezone_selector.render(frame, chunks[5]);
-        self.keymap_selector.render(frame, chunks[6]);
-        self.locale_selector.render(frame, chunks[7]);
+
+        // Password strength indicator
+        let password = self.password_input.value();
+        let strength_line = if password.is_empty() {
+            Line::from("")
+        } else {
+            let (label, color) = password_strength(password);
+            Line::from(vec![
+                Span::raw("  Strength: "),
+                Span::styled(label, Style::default().fg(color)),
+            ])
+        };
+        frame.render_widget(Paragraph::new(strength_line), chunks[4]);
+
+        self.password_confirm_input.render(frame, chunks[5]);
+        self.timezone_selector.render(frame, chunks[6]);
+        self.keymap_selector.render(frame, chunks[7]);
+        self.locale_selector.render(frame, chunks[8]);
 
         // Continue button
-        self.continue_button.render(frame, chunks[8]);
+        self.continue_button.render(frame, chunks[9]);
 
         // Error message or status
         if let Some(ref error) = self.error_message {
@@ -293,7 +332,7 @@ impl Screen for ConfigurationScreen {
                 .block(error_block)
                 .style(self.theme.error())
                 .alignment(ratatui::layout::Alignment::Center);
-            frame.render_widget(error_para, chunks[9]);
+            frame.render_widget(error_para, chunks[10]);
         }
 
         // Navigation hints
@@ -306,7 +345,7 @@ impl Screen for ConfigurationScreen {
                 ("Esc", "Back / Quit"),
             ],
             &self.theme,
-            chunks[11],
+            chunks[12],
         );
     }
 

@@ -22,6 +22,20 @@ use crate::ui::{
 
 use super::{Screen, ScreenAction};
 
+/// Tips shown during installation
+const INSTALL_TIPS: &[&str] = &[
+    "Tip: Edit /etc/nixos/configuration.nix to customize your system",
+    "Tip: Use 'nix-shell -p <package>' to try packages without installing",
+    "Tip: Run 'nixos-rebuild switch' after editing configuration.nix",
+    "Tip: NixOS generations let you roll back to previous configurations",
+    "Tip: Use 'nix search nixpkgs <name>' to find packages",
+    "Tip: Enable flakes with 'nix.settings.experimental-features = [\"nix-command\" \"flakes\"]'",
+    "Tip: The NixOS manual is available at https://nixos.org/manual/nixos/stable/",
+    "Tip: Use 'nixos-option' to explore available configuration options",
+    "Tip: Home Manager lets you manage user-level configuration with Nix",
+    "Tip: NixOS has ~100,000 packages in nixpkgs — one of the largest repos",
+];
+
 /// Installation screen state
 pub struct InstallationScreen {
     /// Application theme
@@ -42,6 +56,16 @@ pub struct InstallationScreen {
     receiver: Option<Receiver<InstallMessage>>,
     /// Scroll position for log
     scroll_position: usize,
+    /// Current tip index
+    tip_index: usize,
+    /// Frame counter for tip rotation
+    tip_frame_counter: usize,
+    /// Stored config for retry
+    last_config: Option<InstallConfig>,
+    /// Stored root path for retry
+    last_root_path: Option<String>,
+    /// Whether we're in mock mode (for retry)
+    is_mock: bool,
 }
 
 impl InstallationScreen {
@@ -57,11 +81,20 @@ impl InstallationScreen {
             error_message: None,
             receiver: None,
             scroll_position: 0,
+            tip_index: 0,
+            tip_frame_counter: 0,
+            last_config: None,
+            last_root_path: None,
+            is_mock: false,
         }
     }
 
     /// Start the installation process
     pub fn start_installation(&mut self, config: InstallConfig, root_path: String, is_mock: bool) {
+        self.last_config = Some(config.clone());
+        self.last_root_path = Some(root_path.clone());
+        self.is_mock = is_mock;
+
         let rx = run_installation_async(config, root_path, is_mock);
         self.receiver = Some(rx);
         self.is_running = true;
@@ -70,6 +103,22 @@ impl InstallationScreen {
         self.error_message = None;
         self.log_lines.clear();
         self.log_lines.push("Starting installation...".to_string());
+    }
+
+    /// Retry the installation after a failure
+    fn retry_installation(&mut self) {
+        if let (Some(config), Some(root_path)) = (self.last_config.clone(), self.last_root_path.clone()) {
+            self.log_lines.push("".to_string());
+            self.log_lines.push("=== Retrying installation ===".to_string());
+
+            let rx = run_installation_async(config, root_path, self.is_mock);
+            self.receiver = Some(rx);
+            self.is_running = true;
+            self.is_complete = false;
+            self.has_error = false;
+            self.error_message = None;
+            self.tip_frame_counter = 0;
+        }
     }
 
     /// Check for installation updates
@@ -146,13 +195,23 @@ impl Screen for InstallationScreen {
         // Update installation state
         self.update();
 
+        // Rotate tips every ~150 frames (~15 seconds at 100ms poll)
+        if self.is_running {
+            self.tip_frame_counter += 1;
+            if self.tip_frame_counter >= 150 {
+                self.tip_frame_counter = 0;
+                self.tip_index = (self.tip_index + 1) % INSTALL_TIPS.len();
+            }
+        }
+
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3),  // Title
                 Constraint::Length(4),  // Progress bar
                 Constraint::Length(3),  // Current operation
-                Constraint::Min(10),    // Log output
+                Constraint::Length(3),  // Tip
+                Constraint::Min(8),     // Log output
                 Constraint::Length(3),  // Status/Navigation
             ])
             .split(area);
@@ -209,13 +268,24 @@ impl Screen for InstallationScreen {
         .alignment(ratatui::layout::Alignment::Center);
         frame.render_widget(operation_para, chunks[2]);
 
+        // Tip display
+        if self.is_running {
+            let tip = INSTALL_TIPS[self.tip_index];
+            let tip_para = Paragraph::new(vec![
+                Line::from(""),
+                Line::from(Span::styled(tip, Style::default().fg(self.theme.info))),
+            ])
+            .alignment(ratatui::layout::Alignment::Center);
+            frame.render_widget(tip_para, chunks[3]);
+        }
+
         // Log output
         let log_block = Block::default()
             .borders(Borders::ALL)
             .title(" Installation Log ")
             .border_style(self.theme.border_style());
 
-        let visible_lines = chunks[3].height.saturating_sub(2) as usize;
+        let visible_lines = chunks[4].height.saturating_sub(2) as usize;
         let start_idx = self.scroll_position.saturating_sub(visible_lines / 2);
         let end_idx = (start_idx + visible_lines).min(self.log_lines.len());
 
@@ -234,23 +304,22 @@ impl Screen for InstallationScreen {
             .collect();
 
         let log_list = List::new(log_items).block(log_block);
-        frame.render_widget(log_list, chunks[3]);
+        frame.render_widget(log_list, chunks[4]);
 
         // Status and navigation
-        // Navigation hints
         if self.is_complete {
             render_navigation_hints(
                 frame,
                 &[("Enter", "Continue to completion screen")],
                 &self.theme,
-                chunks[4],
+                chunks[5],
             );
         } else if self.has_error {
             render_navigation_hints(
                 frame,
-                &[("q", "Exit"), ("↑↓", "Scroll log")],
+                &[("q", "Exit"), ("r", "Retry"), ("↑↓", "Scroll log")],
                 &self.theme,
-                chunks[4],
+                chunks[5],
             );
         } else {
             // Show a plain message during installation
@@ -260,7 +329,7 @@ impl Screen for InstallationScreen {
                 Span::raw(" Scroll log"),
             ])];
             let nav_para = Paragraph::new(nav_text).alignment(ratatui::layout::Alignment::Center);
-            frame.render_widget(nav_para, chunks[4]);
+            frame.render_widget(nav_para, chunks[5]);
         }
     }
 
@@ -275,6 +344,10 @@ impl Screen for InstallationScreen {
         // Handle screen-specific keys
         match key {
             KeyCode::Enter if self.is_complete => ScreenAction::Next,
+            KeyCode::Char('r') if self.has_error => {
+                self.retry_installation();
+                ScreenAction::None
+            }
             KeyCode::Up => {
                 self.scroll_up();
                 ScreenAction::None
