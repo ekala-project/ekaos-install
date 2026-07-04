@@ -57,6 +57,23 @@ impl DiskType {
     }
 }
 
+/// Partition information for display
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PartitionInfo {
+    /// Partition name (e.g., "sda1")
+    pub name: String,
+    /// Size in bytes
+    pub size: u64,
+    /// Human-readable size
+    pub size_human: String,
+    /// Filesystem type (e.g., "ext4", "ntfs", "vfat")
+    pub fstype: Option<String>,
+    /// Mount point if mounted
+    pub mountpoint: Option<String>,
+    /// Label if available
+    pub label: Option<String>,
+}
+
 /// Disk information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Disk {
@@ -83,6 +100,9 @@ pub struct Disk {
     /// Mount point (if mounted)
     #[serde(default)]
     pub mountpoint: Option<String>,
+    /// Existing partitions on this disk
+    #[serde(default)]
+    pub partitions: Vec<PartitionInfo>,
 }
 
 impl Disk {
@@ -131,6 +151,12 @@ struct BlockDevice {
     readonly: bool,
     #[serde(default)]
     mountpoint: Option<String>,
+    #[serde(default)]
+    fstype: Option<String>,
+    #[serde(default)]
+    label: Option<String>,
+    #[serde(default)]
+    children: Option<Vec<BlockDevice>>,
 }
 
 /// Detect available disks
@@ -152,7 +178,7 @@ fn detect_disks_real() -> Result<Vec<Disk>> {
         .arg("--json")
         .arg("--bytes")
         .arg("--output")
-        .arg("NAME,TYPE,SIZE,MODEL,RM,RO,MOUNTPOINT")
+        .arg("NAME,TYPE,SIZE,MODEL,RM,RO,MOUNTPOINT,FSTYPE,LABEL")
         .arg("--exclude")
         .arg("7") // Exclude loop devices
         .output()
@@ -182,6 +208,19 @@ fn detect_disks_real() -> Result<Vec<Disk>> {
             let disk_type = classify_disk_type(&dev.name);
             let size_human = format_size_human(dev.size);
 
+            let partitions = dev.children.as_ref().map(|children| {
+                children.iter().filter(|c| c.device_type == "part").map(|c| {
+                    PartitionInfo {
+                        name: c.name.clone(),
+                        size: c.size,
+                        size_human: format_size_human(c.size),
+                        fstype: c.fstype.clone(),
+                        mountpoint: c.mountpoint.clone(),
+                        label: c.label.clone(),
+                    }
+                }).collect::<Vec<_>>()
+            }).unwrap_or_default();
+
             Disk {
                 name: dev.name.clone(),
                 path: format!("/dev/{}", dev.name),
@@ -192,6 +231,7 @@ fn detect_disks_real() -> Result<Vec<Disk>> {
                 removable: dev.removable,
                 readonly: dev.readonly,
                 mountpoint: dev.mountpoint,
+                partitions,
             }
         })
         .collect();
@@ -253,6 +293,24 @@ fn detect_disks_mock() -> Vec<Disk> {
             removable: false,
             readonly: false,
             mountpoint: None,
+            partitions: vec![
+                PartitionInfo {
+                    name: "sda1".to_string(),
+                    size: 512_000_000,
+                    size_human: "512.0 MB".to_string(),
+                    fstype: Some("vfat".to_string()),
+                    mountpoint: None,
+                    label: Some("EFI".to_string()),
+                },
+                PartitionInfo {
+                    name: "sda2".to_string(),
+                    size: 491_488_000_000,
+                    size_human: "491.5 GB".to_string(),
+                    fstype: Some("ext4".to_string()),
+                    mountpoint: None,
+                    label: Some("nixos".to_string()),
+                },
+            ],
         },
         Disk {
             name: "nvme0n1".to_string(),
@@ -264,6 +322,7 @@ fn detect_disks_mock() -> Vec<Disk> {
             removable: false,
             readonly: false,
             mountpoint: None,
+            partitions: Vec::new(),
         },
     ]
 }
@@ -305,6 +364,7 @@ mod tests {
             removable: false,
             readonly: false,
             mountpoint: None,
+            partitions: Vec::new(),
         };
         assert!(disk.is_installable());
 
@@ -342,6 +402,7 @@ mod tests {
             removable: false,
             readonly: false,
             mountpoint: None,
+            partitions: Vec::new(),
         };
         assert!((disk.size_gb() - 500.0).abs() < 0.1);
     }
@@ -407,6 +468,7 @@ mod tests {
             removable: false,
             readonly: false,
             mountpoint: None,
+            partitions: Vec::new(),
         };
         assert!(disk.display_name().contains("sda"));
         assert!(disk.display_name().contains("Samsung SSD"));

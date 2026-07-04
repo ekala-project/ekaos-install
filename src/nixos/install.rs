@@ -309,15 +309,37 @@ fn run_installation_impl(
         log_line: None,
     }));
 
-    // Simulate progress updates during installation
-    for i in 0..6 {
-        thread::sleep(Duration::from_millis(if is_mock { 200 } else { 5000 }));
-        let percent = 30 + (i * 10);
+    if is_mock {
+        // In mock mode, simulate realistic progress stages
+        let mock_stages = [
+            (35, "Evaluating NixOS configuration..."),
+            (40, "Building system derivations..."),
+            (50, "Downloading dependencies from cache..."),
+            (60, "Building kernel modules..."),
+            (70, "Installing system packages..."),
+            (80, "Configuring bootloader..."),
+            (85, "Setting up user accounts..."),
+        ];
+        for (percent, desc) in mock_stages {
+            thread::sleep(Duration::from_millis(300));
+            let _ = tx.send(InstallMessage::Progress(InstallProgress {
+                stage: InstallStage::Installing,
+                percent,
+                operation: desc.to_string(),
+                log_line: Some(desc.to_string()),
+            }));
+            let _ = tx.send(InstallMessage::Log(desc.to_string()));
+        }
+    } else {
+        // Real mode: report that we're waiting for nixos-install
+        let _ = tx.send(InstallMessage::Log(
+            "Running nixos-install... (this typically takes 15-60 minutes)".to_string(),
+        ));
         let _ = tx.send(InstallMessage::Progress(InstallProgress {
             stage: InstallStage::Installing,
-            percent,
-            operation: format!("Installing NixOS... {}%", percent),
-            log_line: Some(format!("Installing system packages (step {})", i + 1)),
+            percent: 50,
+            operation: "Running nixos-install (downloading and building packages)...".to_string(),
+            log_line: None,
         }));
     }
 

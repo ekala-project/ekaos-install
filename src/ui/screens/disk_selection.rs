@@ -173,7 +173,7 @@ impl Screen for DiskSelectionScreen {
                     let prefix = if is_selected { "► " } else { "  " };
                     let status_icon = if is_installable { "✓" } else { "✗" };
 
-                    let line = Line::from(vec![
+                    let mut lines = vec![Line::from(vec![
                         Span::raw(prefix),
                         Span::styled(
                             status_icon,
@@ -190,9 +190,27 @@ impl Screen for DiskSelectionScreen {
                             format!("[{}]", disk.disk_type.as_str()),
                             self.theme.text_muted(),
                         ),
-                    ]);
+                    ])];
 
-                    ListItem::new(line)
+                    // Show existing partitions if any
+                    if !disk.partitions.is_empty() && is_selected {
+                        for part in &disk.partitions {
+                            let fs_str = part.fstype.as_deref().unwrap_or("unknown");
+                            let label_str = part.label.as_ref()
+                                .map(|l| format!(" \"{}\"", l))
+                                .unwrap_or_default();
+                            lines.push(Line::from(vec![
+                                Span::raw("      "),
+                                Span::styled(&part.name, self.theme.text_muted()),
+                                Span::styled(
+                                    format!("  {}  {}{}", part.size_human, fs_str, label_str),
+                                    self.theme.text_muted(),
+                                ),
+                            ]));
+                        }
+                    }
+
+                    ListItem::new(lines)
                 })
                 .collect();
 

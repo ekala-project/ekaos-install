@@ -5,6 +5,7 @@
 use crate::config::{BootLoader, InstallConfig};
 use crate::error::{ConfigError, InstallerError};
 use std::path::Path;
+use std::process::Command;
 
 /// Generate a configuration.nix file from the installation configuration
 pub fn generate_configuration(config: &InstallConfig) -> Result<String, InstallerError> {
@@ -151,10 +152,48 @@ pub fn generate_configuration(config: &InstallConfig) -> Result<String, Installe
     nix_config.push_str("  # Before changing this value read the documentation for this option\n");
     nix_config
         .push_str("  # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).\n");
-    nix_config.push_str("  system.stateVersion = \"24.05\"; # Did you read the comment?\n");
+    let state_version = detect_state_version();
+    nix_config.push_str(&format!(
+        "  system.stateVersion = \"{}\"; # Did you read the comment?\n",
+        state_version
+    ));
     nix_config.push_str("}\n");
 
     Ok(nix_config)
+}
+
+/// Detect the NixOS state version from the running system.
+/// Falls back to "24.11" if detection fails.
+fn detect_state_version() -> String {
+    // Try nixos-version command first (outputs e.g. "24.11.20241201.abcdef")
+    if let Ok(output) = Command::new("nixos-version").output() {
+        if output.status.success() {
+            let version_str = String::from_utf8_lossy(&output.stdout);
+            // Extract major.minor (e.g. "24.11" from "24.11.20241201.abcdef")
+            let trimmed = version_str.trim();
+            if let Some(dot_pos) = trimmed.find('.') {
+                if let Some(second_dot) = trimmed[dot_pos + 1..].find('.') {
+                    return trimmed[..dot_pos + 1 + second_dot].to_string();
+                }
+                // Only one dot, return as-is
+                return trimmed.to_string();
+            }
+        }
+    }
+
+    // Fallback: try parsing /etc/os-release for VERSION_ID
+    if let Ok(content) = std::fs::read_to_string("/etc/os-release") {
+        for line in content.lines() {
+            if let Some(version) = line.strip_prefix("VERSION_ID=\"") {
+                if let Some(version) = version.strip_suffix('"') {
+                    return version.to_string();
+                }
+            }
+        }
+    }
+
+    // Final fallback
+    "24.11".to_string()
 }
 
 /// Write configuration to a file
