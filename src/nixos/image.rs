@@ -420,6 +420,7 @@ mod tests {
     /// Helper: write magic bytes to a temp file and detect format
     fn detect_magic(magic: &[u8], extension: &str) -> ImageFormat {
         let dir = std::env::temp_dir();
+        std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(format!("test_image{}", extension));
         let mut file = File::create(&path).unwrap();
         // Write magic bytes padded to at least 65 bytes
