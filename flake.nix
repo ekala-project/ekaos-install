@@ -34,7 +34,6 @@
       formatter =
         let
           fmt = treefmt-nix.lib.evalModule legacyPackages {
-            programs.rustfmt.enable = true;
             programs.nixfmt.enable = true;
           };
         in
