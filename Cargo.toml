@@ -2,20 +2,19 @@
 name = "ekaos-install"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.74"
+rust-version = "1.80"
 authors = ["Your Name <your.email@example.com>"]
-description = "A terminal user interface for guided NixOS installation"
+description = "A native GUI application for guided NixOS installation"
 readme = "README.md"
 homepage = "https://github.com/yourusername/ekaos-install"
 repository = "https://github.com/yourusername/ekaos-install"
 license = "MIT OR Apache-2.0"
-keywords = ["nixos", "tui", "installer", "terminal"]
-categories = ["command-line-utilities"]
+keywords = ["nixos", "gui", "installer", "native"]
+categories = ["gui"]
 
 [dependencies]
-# TUI framework
-ratatui = "0.26"
-crossterm = { version = "0.27", features = ["event-stream"] }
+# GUI framework
+gpui = "0.2"
 
 # CLI argument parsing
 clap = { version = "4.5", features = ["derive", "env", "wrap_help"] }
@@ -35,8 +34,6 @@ serde_json = "1.0"
 libc = "0.2"
 
 [dev-dependencies]
-assert_cmd = "2.0"
-predicates = "3.1"
 tempfile = "3.10"
 
 [profile.release]

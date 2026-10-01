@@ -1,32 +1,22 @@
 //! System configuration screen
 //!
 //! Collects basic system configuration: hostname, username, password, timezone.
+//! Implements `gpui::Render` for the gpui GUI framework.
 
-use crossterm::event::KeyCode;
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
-};
-use tracing::debug;
+use gpui::prelude::*;
+use gpui::{div, px, FontWeight, Hsla, IntoElement, SharedString};
 
 use crate::config::{BootLoader, InstallConfig};
 use crate::data::keymaps::get_keymap_list;
 use crate::data::locales::get_locale_list;
 use crate::data::timezones::{detect_timezone, get_timezone_list};
 use crate::system::BootMode;
-use crate::ui::{
-    components::{Button, Component, FilterableSelectList, Focusable, InputField, Interactive},
-    theme::AppTheme,
-    utils::{keycode_to_input_event, render_navigation_hints},
-};
+use crate::ui::components::{Button, ButtonStyle, FilterableSelectList};
+use crate::ui::theme::{spacing, AppTheme};
+use crate::ui::utils::NavigationHints;
 
-use super::{Screen, ScreenAction};
-
-/// Evaluate password strength and return a label and color
-fn password_strength(password: &str) -> (&'static str, Color) {
+/// Evaluate password strength and return a label and color (Hsla)
+fn password_strength(password: &str) -> (&'static str, Hsla) {
     let len = password.len();
     let has_upper = password.chars().any(|c| c.is_uppercase());
     let has_lower = password.chars().any(|c| c.is_lowercase());
@@ -38,36 +28,17 @@ fn password_strength(password: &str) -> (&'static str, Color) {
         .filter(|&&x| x)
         .count();
 
+    let theme = AppTheme::new();
     if len >= 12 && variety >= 3 {
-        ("Strong ███████████", Color::Green)
+        ("Strong", theme.success)
     } else if len >= 8 && variety >= 2 {
-        ("Medium ███████░░░░", Color::Yellow)
+        ("Medium", theme.warning)
     } else {
-        ("Weak   ███░░░░░░░░", Color::Red)
+        ("Weak", theme.error)
     }
 }
 
-/// Configuration screen state
-pub struct ConfigurationScreen {
-    /// Application theme
-    theme: AppTheme,
-    /// Configuration being built
-    config: InstallConfig,
-    /// Input fields
-    hostname_input: InputField,
-    username_input: InputField,
-    password_input: InputField,
-    password_confirm_input: InputField,
-    timezone_selector: FilterableSelectList<String>,
-    keymap_selector: FilterableSelectList<String>,
-    locale_selector: FilterableSelectList<String>,
-    continue_button: Button,
-    /// Currently focused field
-    focused_field: FocusedField,
-    /// Validation error message
-    error_message: Option<String>,
-}
-
+/// Which field is currently focused
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FocusedField {
     Hostname,
@@ -80,17 +51,34 @@ enum FocusedField {
     ContinueButton,
 }
 
+/// Configuration screen state
+pub struct ConfigurationScreen {
+    /// Configuration being built
+    config: InstallConfig,
+    /// Hostname input value
+    hostname_value: String,
+    /// Username input value
+    username_value: String,
+    /// Password input value
+    password_value: String,
+    /// Password confirmation input value
+    password_confirm_value: String,
+    /// Timezone selector
+    timezone_selector: FilterableSelectList<String>,
+    /// Keymap selector
+    keymap_selector: FilterableSelectList<String>,
+    /// Locale selector
+    locale_selector: FilterableSelectList<String>,
+    /// Currently focused field
+    focused_field: FocusedField,
+    /// Validation error message
+    error_message: Option<String>,
+}
+
+#[allow(dead_code)]
 impl ConfigurationScreen {
     /// Create a new configuration screen
     pub fn new() -> Self {
-        let mut hostname_input = InputField::new("Hostname");
-        hostname_input.set_value("nixos".to_string());
-        hostname_input.set_focused(true);
-
-        let username_input = InputField::new("Username");
-        let password_input = InputField::new("Password").password();
-        let password_confirm_input = InputField::new("Confirm Password").password();
-
         // Create timezone selector with all available timezones
         let timezones = get_timezone_list();
         let timezone_items: Vec<(String, String)> =
@@ -112,19 +100,15 @@ impl ConfigurationScreen {
         let mut locale_selector = FilterableSelectList::new("Locale").with_items(locale_items);
         locale_selector.set_selected_by_label("en_US.UTF-8");
 
-        let continue_button = Button::new("Continue");
-
         Self {
-            theme: AppTheme::new(),
             config: InstallConfig::default(),
-            hostname_input,
-            username_input,
-            password_input,
-            password_confirm_input,
+            hostname_value: "nixos".to_string(),
+            username_value: String::new(),
+            password_value: String::new(),
+            password_confirm_value: String::new(),
             timezone_selector,
             keymap_selector,
             locale_selector,
-            continue_button,
             focused_field: FocusedField::Hostname,
             error_message: None,
         }
@@ -135,7 +119,7 @@ impl ConfigurationScreen {
         self.config.bootloader = match boot_mode {
             BootMode::Uefi => BootLoader::SystemdBoot,
             BootMode::Bios => BootLoader::Grub,
-            BootMode::Unknown => BootLoader::SystemdBoot, // Default to systemd-boot
+            BootMode::Unknown => BootLoader::SystemdBoot,
         };
     }
 
@@ -164,7 +148,6 @@ impl ConfigurationScreen {
 
     /// Focus next field
     fn focus_next(&mut self) {
-        self.clear_focus();
         self.focused_field = match self.focused_field {
             FocusedField::Hostname => FocusedField::Username,
             FocusedField::Username => FocusedField::Password,
@@ -175,12 +158,10 @@ impl ConfigurationScreen {
             FocusedField::Locale => FocusedField::ContinueButton,
             FocusedField::ContinueButton => FocusedField::Hostname,
         };
-        self.set_focus();
     }
 
     /// Focus previous field
     fn focus_previous(&mut self) {
-        self.clear_focus();
         self.focused_field = match self.focused_field {
             FocusedField::Hostname => FocusedField::ContinueButton,
             FocusedField::Username => FocusedField::Hostname,
@@ -191,40 +172,13 @@ impl ConfigurationScreen {
             FocusedField::Locale => FocusedField::Keymap,
             FocusedField::ContinueButton => FocusedField::Locale,
         };
-        self.set_focus();
-    }
-
-    /// Clear focus from all fields
-    fn clear_focus(&mut self) {
-        self.hostname_input.set_focused(false);
-        self.username_input.set_focused(false);
-        self.password_input.set_focused(false);
-        self.password_confirm_input.set_focused(false);
-        self.timezone_selector.set_focused(false);
-        self.keymap_selector.set_focused(false);
-        self.locale_selector.set_focused(false);
-        self.continue_button.set_focused(false);
-    }
-
-    /// Set focus on current field
-    fn set_focus(&mut self) {
-        match self.focused_field {
-            FocusedField::Hostname => self.hostname_input.set_focused(true),
-            FocusedField::Username => self.username_input.set_focused(true),
-            FocusedField::Password => self.password_input.set_focused(true),
-            FocusedField::PasswordConfirm => self.password_confirm_input.set_focused(true),
-            FocusedField::Timezone => self.timezone_selector.set_focused(true),
-            FocusedField::Keymap => self.keymap_selector.set_focused(true),
-            FocusedField::Locale => self.locale_selector.set_focused(true),
-            FocusedField::ContinueButton => self.continue_button.set_focused(true),
-        }
     }
 
     /// Update configuration from input fields
     fn update_config(&mut self) {
-        self.config.hostname = self.hostname_input.value().to_string();
-        self.config.user.username = self.username_input.value().to_string();
-        self.config.user.password = self.password_input.value().to_string();
+        self.config.hostname = self.hostname_value.clone();
+        self.config.user.username = self.username_value.clone();
+        self.config.user.password = self.password_value.clone();
         if let Some(timezone) = self.timezone_selector.selected_value() {
             self.config.timezone = timezone.clone();
         }
@@ -242,7 +196,7 @@ impl ConfigurationScreen {
         self.update_config();
 
         // Check password match
-        if self.password_input.value() != self.password_confirm_input.value() {
+        if self.password_value != self.password_confirm_value {
             self.error_message = Some("Passwords do not match".to_string());
             return false;
         }
@@ -255,216 +209,27 @@ impl ConfigurationScreen {
 
         true
     }
-}
 
-impl Default for ConfigurationScreen {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Screen for ConfigurationScreen {
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(2), // Instructions
-                Constraint::Length(3), // Hostname
-                Constraint::Length(3), // Username
-                Constraint::Length(3), // Password
-                Constraint::Length(1), // Password strength
-                Constraint::Length(3), // Confirm password
-                Constraint::Length(8), // Timezone selector
-                Constraint::Length(8), // Keymap selector
-                Constraint::Length(8), // Locale selector
-                Constraint::Length(3), // Continue button
-                Constraint::Length(3), // Error/status
-                Constraint::Min(0),    // Spacer
-                Constraint::Length(3), // Navigation
-            ])
-            .split(area);
-
-        // Instructions
-        let instructions = Paragraph::new(vec![
-            Line::from(""),
-            Line::from("Configure your NixOS system. Use Tab to move between fields."),
-        ])
-        .style(self.theme.text())
-        .alignment(ratatui::layout::Alignment::Center);
-        frame.render_widget(instructions, chunks[0]);
-
-        // Input fields
-        self.hostname_input.render(frame, chunks[1]);
-        self.username_input.render(frame, chunks[2]);
-        self.password_input.render(frame, chunks[3]);
-
-        // Password strength indicator
-        let password = self.password_input.value();
-        let strength_line = if password.is_empty() {
-            Line::from("")
-        } else {
-            let (label, color) = password_strength(password);
-            Line::from(vec![
-                Span::raw("  Strength: "),
-                Span::styled(label, Style::default().fg(color)),
-            ])
-        };
-        frame.render_widget(Paragraph::new(strength_line), chunks[4]);
-
-        self.password_confirm_input.render(frame, chunks[5]);
-        self.timezone_selector.render(frame, chunks[6]);
-        self.keymap_selector.render(frame, chunks[7]);
-        self.locale_selector.render(frame, chunks[8]);
-
-        // Continue button
-        self.continue_button.render(frame, chunks[9]);
-
-        // Error message or status
-        if let Some(ref error) = self.error_message {
-            let error_block = Block::default()
-                .borders(Borders::ALL)
-                .border_style(self.theme.error());
-
-            let error_para = Paragraph::new(error.as_str())
-                .block(error_block)
-                .style(self.theme.error())
-                .alignment(ratatui::layout::Alignment::Center);
-            frame.render_widget(error_para, chunks[10]);
-        }
-
-        // Navigation hints
-        render_navigation_hints(
-            frame,
-            &[
-                ("↑↓←→", "Navigate fields"),
-                ("Tab", "Next field"),
-                ("Enter", "Next / Submit"),
-                ("Esc", "Back / Quit"),
-            ],
-            &self.theme,
-            chunks[12],
-        );
+    /// Whether this screen can proceed (basic requirements met)
+    pub fn can_proceed(&self) -> bool {
+        !self.hostname_value.is_empty()
+            && !self.username_value.is_empty()
+            && !self.password_value.is_empty()
+            && !self.password_confirm_value.is_empty()
     }
 
-    fn handle_input(&mut self, key: KeyCode) -> ScreenAction {
-        // Try standard handlers first (quit, help), but only when not in an input field
-        if !self.hostname_input.is_focused()
-            && !self.username_input.is_focused()
-            && !self.password_input.is_focused()
-            && !self.password_confirm_input.is_focused()
-            && !self.timezone_selector.is_focused()
-            && !self.keymap_selector.is_focused()
-            && !self.locale_selector.is_focused()
-        {
-            if let Some(action) = self.handle_standard_input(key) {
-                return action;
-            }
-            // Try back handler (only when not in input fields)
-            if let Some(action) = self.handle_back_input(key) {
-                return action;
-            }
-        }
-
-        // Handle screen-specific keys
-        match key {
-            KeyCode::Tab => {
-                self.focus_next();
-                ScreenAction::None
-            }
-            KeyCode::BackTab => {
-                self.focus_previous();
-                ScreenAction::None
-            }
-            KeyCode::Left => {
-                // Left arrow always goes to previous field
-                self.focus_previous();
-                ScreenAction::None
-            }
-            KeyCode::Right => {
-                // Right arrow always goes to next field
-                self.focus_next();
-                ScreenAction::None
-            }
-            KeyCode::Down
-                if !self.timezone_selector.is_focused()
-                    && !self.keymap_selector.is_focused()
-                    && !self.locale_selector.is_focused() =>
-            {
-                // Only use Down for navigation if not in a selector
-                self.focus_next();
-                ScreenAction::None
-            }
-            KeyCode::Up
-                if !self.timezone_selector.is_focused()
-                    && !self.keymap_selector.is_focused()
-                    && !self.locale_selector.is_focused() =>
-            {
-                // Only use Up for navigation if not in a selector
-                self.focus_previous();
-                ScreenAction::None
-            }
-            KeyCode::Enter => {
-                // Enter behavior depends on which field is focused
-                match self.focused_field {
-                    FocusedField::ContinueButton => {
-                        // Only submit when Continue button is focused
-                        if self.validate() {
-                            debug!("Configuration validated successfully");
-                            ScreenAction::Next
-                        } else {
-                            ScreenAction::None
-                        }
-                    }
-                    _ => {
-                        // For all other fields, Enter moves to next field
-                        self.focus_next();
-                        ScreenAction::None
-                    }
-                }
-            }
-            _ => {
-                // Convert KeyCode to InputEvent and pass to focused field
-                if let Some(event) = keycode_to_input_event(key) {
-                    match self.focused_field {
-                        FocusedField::Hostname => {
-                            self.hostname_input.handle_input(event);
-                        }
-                        FocusedField::Username => {
-                            self.username_input.handle_input(event);
-                        }
-                        FocusedField::Password => {
-                            self.password_input.handle_input(event);
-                        }
-                        FocusedField::PasswordConfirm => {
-                            self.password_confirm_input.handle_input(event);
-                        }
-                        FocusedField::Timezone => {
-                            self.timezone_selector.handle_input(event);
-                            self.update_config();
-                        }
-                        FocusedField::Keymap => {
-                            self.keymap_selector.handle_input(event);
-                            self.update_config();
-                        }
-                        FocusedField::Locale => {
-                            self.locale_selector.handle_input(event);
-                            self.update_config();
-                        }
-                        FocusedField::ContinueButton => {
-                            // Button doesn't need other input handling
-                        }
-                    }
-                }
-                ScreenAction::None
-            }
-        }
+    /// Whether this screen can go back
+    pub fn can_go_back(&self) -> bool {
+        true
     }
 
-    fn title(&self) -> &str {
+    /// Title of this screen
+    pub fn title(&self) -> &str {
         "System Configuration"
     }
 
-    fn help_content(&self) -> Vec<String> {
+    /// Help content for this screen
+    pub fn help_content(&self) -> Vec<String> {
         vec![
             "# System Configuration Screen".to_string(),
             "".to_string(),
@@ -473,58 +238,202 @@ impl Screen for ConfigurationScreen {
             "## Required Fields".to_string(),
             "".to_string(),
             "- Hostname: Name for your computer on the network".to_string(),
-            "  - Must contain only letters, numbers, and hyphens".to_string(),
-            "  - Default: nixos".to_string(),
-            "".to_string(),
             "- Username: Your user account name".to_string(),
-            "  - Must be lowercase letters, numbers, or underscores".to_string(),
-            "  - Maximum 32 characters".to_string(),
-            "  - This user will have sudo privileges".to_string(),
-            "".to_string(),
-            "- Password: Your account password".to_string(),
-            "  - Minimum 6 characters".to_string(),
-            "  - Must match confirmation".to_string(),
+            "- Password: Your account password (min 6 characters)".to_string(),
             "".to_string(),
             "## Additional Settings".to_string(),
             "".to_string(),
-            "- Timezone: Select your timezone from ~250 options".to_string(),
-            "  - Type to filter timezones (e.g., 'york', 'tokyo', 'london')".to_string(),
-            "  - Use ↑↓ to navigate filtered results".to_string(),
-            "  - Press Esc to clear filter".to_string(),
-            "  - Default: America/New_York".to_string(),
-            "".to_string(),
+            "- Timezone: Select your timezone".to_string(),
             "- Keyboard Layout: Select your console keymap".to_string(),
-            "  - Type to filter (e.g., 'german', 'french', 'dvorak')".to_string(),
-            "  - Default: us".to_string(),
-            "".to_string(),
             "- Locale: Select your system locale".to_string(),
-            "  - Type to filter (e.g., 'german', 'french', 'japanese')".to_string(),
-            "  - Default: en_US.UTF-8".to_string(),
-            "".to_string(),
-            "## Keyboard Shortcuts".to_string(),
-            "".to_string(),
-            "- ↑↓: Navigate between fields (or within selector lists)".to_string(),
-            "- ←→: Navigate to previous/next field (works everywhere)".to_string(),
-            "- Tab / Shift+Tab: Also navigate fields".to_string(),
-            "- Enter: Move to next field (or submit from Continue button)".to_string(),
-            "- ← / Backspace: Go back (when not in a text field)".to_string(),
-            "- ?: Toggle this help panel".to_string(),
-            "- q / Esc: Quit the installer".to_string(),
-            "".to_string(),
-            "## Navigation Flow".to_string(),
-            "".to_string(),
-            "- Fill out all fields using Tab or Enter to move between them".to_string(),
-            "- When you reach the Continue button, press Enter to submit".to_string(),
-            "- The form will validate and proceed to the confirmation screen".to_string(),
         ]
     }
 
-    fn can_proceed(&self) -> bool {
-        // Check if basic requirements are met
-        !self.hostname_input.value().is_empty()
-            && !self.username_input.value().is_empty()
-            && !self.password_input.value().is_empty()
-            && !self.password_confirm_input.value().is_empty()
+    /// Build a labeled input field element
+    fn input_field_element(
+        label: &str,
+        value: &str,
+        focused: bool,
+        is_password: bool,
+        theme: &AppTheme,
+    ) -> impl IntoElement {
+        let border_color = if focused { theme.primary } else { theme.border };
+        let label_text: SharedString = label.to_string().into();
+        let display_text: SharedString = if is_password && !value.is_empty() {
+            if focused {
+                format!("{}{}", "\u{2022}".repeat(value.len()), "\u{2588}").into()
+            } else {
+                "\u{2022}".repeat(value.len()).into()
+            }
+        } else if value.is_empty() {
+            if focused {
+                "\u{2588}".to_string().into()
+            } else {
+                SharedString::default()
+            }
+        } else if focused {
+            format!("{}\u{2588}", value).into()
+        } else {
+            value.to_string().into()
+        };
+
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(spacing::SMALL))
+            .child(
+                div()
+                    .text_color(border_color)
+                    .text_sm()
+                    .font_weight(if focused {
+                        FontWeight::BOLD
+                    } else {
+                        FontWeight::NORMAL
+                    })
+                    .child(label_text),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .border_1()
+                    .border_color(border_color)
+                    .rounded(px(4.0))
+                    .px(px(spacing::MEDIUM))
+                    .py(px(spacing::SMALL))
+                    .text_color(if value.is_empty() {
+                        theme.muted
+                    } else {
+                        theme.foreground
+                    })
+                    .child(display_text),
+            )
+    }
+
+    /// Render this screen as a gpui element tree.
+    pub fn view(&mut self) -> impl IntoElement {
+        let theme = AppTheme::new();
+
+        let mut col = div()
+            .flex()
+            .flex_col()
+            .size_full()
+            .gap(px(spacing::MEDIUM))
+            .p(px(spacing::LARGE));
+
+        // Instructions
+        col = col.child(div().w_full().flex().justify_center().child(
+            div().text_color(theme.foreground).text_sm().child(
+                "Configure your NixOS system. Use Tab to move \
+                         between fields.",
+            ),
+        ));
+
+        // Hostname
+        col = col.child(Self::input_field_element(
+            "Hostname",
+            &self.hostname_value.clone(),
+            self.focused_field == FocusedField::Hostname,
+            false,
+            &theme,
+        ));
+
+        // Username
+        col = col.child(Self::input_field_element(
+            "Username",
+            &self.username_value.clone(),
+            self.focused_field == FocusedField::Username,
+            false,
+            &theme,
+        ));
+
+        // Password
+        col = col.child(Self::input_field_element(
+            "Password",
+            &self.password_value.clone(),
+            self.focused_field == FocusedField::Password,
+            true,
+            &theme,
+        ));
+
+        // Password strength indicator
+        if !self.password_value.is_empty() {
+            let (label, color) = password_strength(&self.password_value);
+            let strength_text: SharedString = format!("  Strength: {}", label).into();
+            col = col.child(div().text_color(color).text_sm().child(strength_text));
+        }
+
+        // Password confirm
+        col = col.child(Self::input_field_element(
+            "Confirm Password",
+            &self.password_confirm_value.clone(),
+            self.focused_field == FocusedField::PasswordConfirm,
+            true,
+            &theme,
+        ));
+
+        // Timezone selector
+        col = col.child(
+            self.timezone_selector
+                .view(self.focused_field == FocusedField::Timezone),
+        );
+
+        // Keymap selector
+        col = col.child(
+            self.keymap_selector
+                .view(self.focused_field == FocusedField::Keymap),
+        );
+
+        // Locale selector
+        col = col.child(
+            self.locale_selector
+                .view(self.focused_field == FocusedField::Locale),
+        );
+
+        // Continue button
+        col = col.child(
+            div().w_full().flex().justify_center().child(
+                Button::new("Continue")
+                    .with_style(ButtonStyle::Primary)
+                    .focused(self.focused_field == FocusedField::ContinueButton)
+                    .enabled(self.can_proceed()),
+            ),
+        );
+
+        // Error message
+        if let Some(ref error) = self.error_message {
+            let error_text: SharedString = error.clone().into();
+            col = col.child(
+                div()
+                    .w_full()
+                    .border_1()
+                    .border_color(theme.error)
+                    .rounded(px(4.0))
+                    .p(px(spacing::MEDIUM))
+                    .flex()
+                    .justify_center()
+                    .child(div().text_color(theme.error).text_sm().child(error_text)),
+            );
+        }
+
+        // Spacer
+        col = col.child(div().flex_1());
+
+        // Navigation hints
+        col = col.child(NavigationHints::new(vec![
+            ("Up/Down/Left/Right", "Navigate fields"),
+            ("Tab", "Next field"),
+            ("Enter", "Next / Submit"),
+            ("Esc", "Back / Quit"),
+        ]));
+
+        col
+    }
+}
+
+impl Default for ConfigurationScreen {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -578,24 +487,24 @@ mod tests {
         let mut screen = ConfigurationScreen::new();
         assert_eq!(screen.focused_field, FocusedField::Hostname);
 
-        // Down arrow moves to next field
-        screen.handle_input(KeyCode::Down);
+        // Down moves to next field
+        screen.focus_next();
         assert_eq!(screen.focused_field, FocusedField::Username);
 
-        screen.handle_input(KeyCode::Down);
+        screen.focus_next();
         assert_eq!(screen.focused_field, FocusedField::Password);
 
-        screen.handle_input(KeyCode::Down);
+        screen.focus_next();
         assert_eq!(screen.focused_field, FocusedField::PasswordConfirm);
 
-        // Up arrow moves to previous field
-        screen.handle_input(KeyCode::Up);
+        // Up moves to previous field
+        screen.focus_previous();
         assert_eq!(screen.focused_field, FocusedField::Password);
 
-        screen.handle_input(KeyCode::Up);
+        screen.focus_previous();
         assert_eq!(screen.focused_field, FocusedField::Username);
 
-        screen.handle_input(KeyCode::Up);
+        screen.focus_previous();
         assert_eq!(screen.focused_field, FocusedField::Hostname);
     }
 
@@ -626,5 +535,129 @@ mod tests {
         assert_eq!(screen.config.root_filesystem, "btrfs");
         assert!(screen.config.luks_encryption);
         assert_eq!(screen.config.luks_passphrase, "mypassphrase");
+    }
+
+    #[test]
+    fn test_can_proceed_empty() {
+        let screen = ConfigurationScreen::new();
+        // Username, password, password_confirm are empty
+        assert!(!screen.can_proceed());
+    }
+
+    #[test]
+    fn test_can_proceed_filled() {
+        let mut screen = ConfigurationScreen::new();
+        screen.hostname_value = "myhost".to_string();
+        screen.username_value = "user".to_string();
+        screen.password_value = "password".to_string();
+        screen.password_confirm_value = "password".to_string();
+        assert!(screen.can_proceed());
+    }
+
+    #[test]
+    fn test_update_config() {
+        let mut screen = ConfigurationScreen::new();
+        screen.hostname_value = "myhost".to_string();
+        screen.username_value = "testuser".to_string();
+        screen.password_value = "mypassword".to_string();
+        screen.update_config();
+
+        assert_eq!(screen.config.hostname, "myhost");
+        assert_eq!(screen.config.user.username, "testuser");
+        assert_eq!(screen.config.user.password, "mypassword");
+    }
+
+    #[test]
+    fn test_validate_password_mismatch() {
+        let mut screen = ConfigurationScreen::new();
+        screen.hostname_value = "myhost".to_string();
+        screen.username_value = "testuser".to_string();
+        screen.password_value = "password123".to_string();
+        screen.password_confirm_value = "different".to_string();
+
+        assert!(!screen.validate());
+        assert_eq!(
+            screen.error_message,
+            Some("Passwords do not match".to_string())
+        );
+    }
+
+    #[test]
+    fn test_validate_success() {
+        let mut screen = ConfigurationScreen::new();
+        screen.hostname_value = "myhost".to_string();
+        screen.username_value = "testuser".to_string();
+        screen.password_value = "password123".to_string();
+        screen.password_confirm_value = "password123".to_string();
+
+        assert!(screen.validate());
+        assert!(screen.error_message.is_none());
+    }
+
+    #[test]
+    fn test_password_strength_weak() {
+        let (label, color) = password_strength("abc");
+        assert_eq!(label, "Weak");
+        let theme = AppTheme::new();
+        assert!((color.h - theme.error.h).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_password_strength_medium() {
+        let (label, color) = password_strength("Abcdef12");
+        assert_eq!(label, "Medium");
+        let theme = AppTheme::new();
+        assert!((color.h - theme.warning.h).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_password_strength_strong() {
+        let (label, color) = password_strength("Abcdef12!@#x");
+        assert_eq!(label, "Strong");
+        let theme = AppTheme::new();
+        assert!((color.h - theme.success.h).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_focus_wraps_forward() {
+        let mut screen = ConfigurationScreen::new();
+        screen.focused_field = FocusedField::ContinueButton;
+        screen.focus_next();
+        assert_eq!(screen.focused_field, FocusedField::Hostname);
+    }
+
+    #[test]
+    fn test_focus_wraps_backward() {
+        let mut screen = ConfigurationScreen::new();
+        screen.focused_field = FocusedField::Hostname;
+        screen.focus_previous();
+        assert_eq!(screen.focused_field, FocusedField::ContinueButton);
+    }
+
+    #[test]
+    fn test_default_hostname() {
+        let screen = ConfigurationScreen::new();
+        assert_eq!(screen.hostname_value, "nixos");
+    }
+
+    #[test]
+    fn test_boot_mode_unknown() {
+        let mut screen = ConfigurationScreen::new();
+        screen.set_boot_mode(BootMode::Unknown);
+        assert_eq!(screen.config.bootloader, BootLoader::SystemdBoot);
+    }
+
+    #[test]
+    fn test_get_config() {
+        let screen = ConfigurationScreen::new();
+        let config = screen.get_config();
+        assert_eq!(config.hostname, "nixos");
+    }
+
+    #[test]
+    fn test_default_impl() {
+        let screen = ConfigurationScreen::default();
+        assert_eq!(screen.focused_field, FocusedField::Hostname);
+        assert!(screen.error_message.is_none());
     }
 }

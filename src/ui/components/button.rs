@@ -1,26 +1,22 @@
 //! Button component
 //!
-//! Interactive button widget with focus and click support
+//! Stateless `RenderOnce` button widget. The parent owns focused/enabled state.
 
-use ratatui::{
-    Frame,
-    layout::{Alignment, Rect},
-    style::{Color, Modifier, Style},
-    text::Line,
-    widgets::{Block, Borders, Paragraph},
-};
+use gpui::prelude::*;
+use gpui::{div, px, FontWeight, Hsla, IntoElement, SharedString};
 
-use super::{Component, Focusable, InputEvent, Interactive};
+use crate::ui::theme::{spacing, AppTheme};
 
-/// Button widget
+/// Stateless button widget rendered by the parent.
+#[derive(IntoElement)]
 pub struct Button {
     /// Button label
-    label: String,
-    /// Whether the button is focused
+    label: SharedString,
+    /// Whether the button appears focused
     focused: bool,
     /// Whether the button is enabled
     enabled: bool,
-    /// Button style (Primary, Secondary, Danger)
+    /// Visual style variant
     style: ButtonStyle,
 }
 
@@ -38,8 +34,8 @@ pub enum ButtonStyle {
 }
 
 impl Button {
-    /// Create a new button
-    pub fn new(label: impl Into<String>) -> Self {
+    /// Create a new button with the given label.
+    pub fn new(label: impl Into<SharedString>) -> Self {
         Self {
             label: label.into(),
             focused: false,
@@ -48,84 +44,71 @@ impl Button {
         }
     }
 
-    /// Set the button style
+    /// Set the button style variant.
     pub fn with_style(mut self, style: ButtonStyle) -> Self {
         self.style = style;
         self
     }
 
-    /// Set enabled state
-    pub fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
+    /// Set whether this button appears focused.
+    pub fn focused(mut self, focused: bool) -> Self {
+        self.focused = focused;
+        self
     }
 
-    /// Get the base color for this button style
-    fn base_color(&self) -> Color {
+    /// Set whether this button is enabled.
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    /// Get the base color for this button style from the theme.
+    fn base_color(&self) -> Hsla {
+        let theme = AppTheme::new();
         match self.style {
-            ButtonStyle::Primary => Color::Cyan,
-            ButtonStyle::Secondary => Color::White,
-            ButtonStyle::Danger => Color::Red,
-            ButtonStyle::Success => Color::Green,
+            ButtonStyle::Primary => theme.primary,
+            ButtonStyle::Secondary => theme.foreground,
+            ButtonStyle::Danger => theme.error,
+            ButtonStyle::Success => theme.success,
         }
     }
 }
 
-impl Focusable for Button {
-    fn is_focused(&self) -> bool {
-        self.focused
-    }
-
-    fn set_focused(&mut self, focused: bool) {
-        self.focused = focused;
-    }
-}
-
-impl Interactive for Button {
-    fn handle_input(&mut self, event: InputEvent) -> bool {
-        matches!(event, InputEvent::Enter)
-    }
-}
-
-impl Component for Button {
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
+impl RenderOnce for Button {
+    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
+        let theme = AppTheme::new();
         let color = if !self.enabled {
-            Color::DarkGray
+            theme.muted
         } else {
             self.base_color()
         };
 
-        let style = if self.focused {
-            Style::default()
-                .fg(Color::Black)
+        let mut el = div()
+            .px(px(spacing::LARGE))
+            .py(px(spacing::SMALL))
+            .rounded(px(4.0))
+            .border_1()
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_sm()
+            .font_weight(FontWeight::BOLD);
+
+        if self.focused && self.enabled {
+            // Focused: colored background, black text
+            el = el
                 .bg(color)
-                .add_modifier(Modifier::BOLD)
+                .text_color(gpui::hsla(0.0, 0.0, 0.0, 1.0))
+                .border_color(color);
         } else if self.enabled {
-            Style::default().fg(color).add_modifier(Modifier::BOLD)
+            // Normal: colored text and border, no background
+            el = el.text_color(color).border_color(color);
         } else {
-            Style::default().fg(Color::DarkGray)
-        };
+            // Disabled: muted everything
+            el = el.text_color(theme.muted).border_color(theme.muted);
+        }
 
-        let block = if self.focused {
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(color).add_modifier(Modifier::BOLD))
-        } else {
-            Block::default().borders(Borders::ALL).border_style(
-                Style::default().fg(if self.enabled { color } else { Color::DarkGray }),
-            )
-        };
-
-        let label = format!(" {} ", self.label);
-        let paragraph = Paragraph::new(Line::from(label))
-            .block(block)
-            .style(style)
-            .alignment(Alignment::Center);
-
-        frame.render_widget(paragraph, area);
-    }
-
-    fn is_enabled(&self) -> bool {
-        self.enabled
+        el.child(self.label)
     }
 }
 
@@ -136,38 +119,52 @@ mod tests {
     #[test]
     fn test_button_creation() {
         let button = Button::new("Click Me");
-        assert_eq!(button.label, "Click Me");
-        assert!(!button.is_focused());
-        assert!(button.is_enabled());
-    }
-
-    #[test]
-    fn test_button_focus() {
-        let mut button = Button::new("Test");
-        assert!(!button.is_focused());
-
-        button.set_focused(true);
-        assert!(button.is_focused());
-    }
-
-    #[test]
-    fn test_button_input() {
-        let mut button = Button::new("Test");
-        button.set_focused(true);
-
-        // Enter should be handled
-        assert!(button.handle_input(InputEvent::Enter));
-
-        // Other keys should not
-        assert!(!button.handle_input(InputEvent::Char('a')));
+        assert_eq!(button.label.as_ref(), "Click Me");
+        assert!(!button.focused);
+        assert!(button.enabled);
+        assert_eq!(button.style, ButtonStyle::Primary);
     }
 
     #[test]
     fn test_button_styles() {
+        let theme = AppTheme::new();
+
         let primary = Button::new("Primary");
-        assert_eq!(primary.base_color(), Color::Cyan);
+        let primary_color = primary.base_color();
+        assert!((primary_color.h - theme.primary.h).abs() < f32::EPSILON);
 
         let danger = Button::new("Delete").with_style(ButtonStyle::Danger);
-        assert_eq!(danger.base_color(), Color::Red);
+        let danger_color = danger.base_color();
+        assert!((danger_color.h - theme.error.h).abs() < f32::EPSILON);
+
+        let success = Button::new("OK").with_style(ButtonStyle::Success);
+        let success_color = success.base_color();
+        assert!((success_color.h - theme.success.h).abs() < f32::EPSILON);
+
+        let secondary = Button::new("Cancel").with_style(ButtonStyle::Secondary);
+        let secondary_color = secondary.base_color();
+        assert!((secondary_color.l - theme.foreground.l).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_button_builder() {
+        let button = Button::new("Test")
+            .with_style(ButtonStyle::Danger)
+            .focused(true)
+            .enabled(false);
+
+        assert_eq!(button.style, ButtonStyle::Danger);
+        assert!(button.focused);
+        assert!(!button.enabled);
+    }
+
+    #[test]
+    fn test_button_base_color_disabled() {
+        let theme = AppTheme::new();
+        let button = Button::new("Disabled").enabled(false);
+        // base_color returns the style color regardless; the render
+        // method picks muted when disabled.
+        let color = button.base_color();
+        assert!((color.h - theme.primary.h).abs() < f32::EPSILON);
     }
 }

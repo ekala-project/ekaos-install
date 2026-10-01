@@ -1,26 +1,19 @@
 //! Installation progress screen
 //!
 //! Displays real-time installation progress with log output.
+//! Implements `gpui::Render` for the gpui GUI framework.
 
-use crossterm::event::KeyCode;
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
-};
+use gpui::prelude::*;
+use gpui::{div, px, FontWeight, IntoElement, SharedString};
 use std::sync::mpsc::Receiver;
 
 use crate::config::InstallConfig;
-use crate::nixos::{InstallMessage, InstallProgress, InstallStage, run_installation_async};
-use crate::ui::{
-    components::{Component, ProgressBar},
-    theme::AppTheme,
-    utils::render_navigation_hints,
+use crate::nixos::install::{
+    run_installation_async, InstallMessage, InstallProgress, InstallStage,
 };
-
-use super::{Screen, ScreenAction};
+use crate::ui::components::ProgressBar;
+use crate::ui::theme::{icons, spacing, AppTheme};
+use crate::ui::utils::NavigationHints;
 
 /// Tips shown during installation
 const INSTALL_TIPS: &[&str] = &[
@@ -29,17 +22,18 @@ const INSTALL_TIPS: &[&str] = &[
     "Tip: Run 'nixos-rebuild switch' after editing configuration.nix",
     "Tip: NixOS generations let you roll back to previous configurations",
     "Tip: Use 'nix search nixpkgs <name>' to find packages",
-    "Tip: Enable flakes with 'nix.settings.experimental-features = [\"nix-command\" \"flakes\"]'",
-    "Tip: The NixOS manual is available at https://nixos.org/manual/nixos/stable/",
+    "Tip: Enable flakes with \
+     'nix.settings.experimental-features = [\"nix-command\" \"flakes\"]'",
+    "Tip: The NixOS manual is available at \
+     https://nixos.org/manual/nixos/stable/",
     "Tip: Use 'nixos-option' to explore available configuration options",
     "Tip: Home Manager lets you manage user-level configuration with Nix",
-    "Tip: NixOS has ~100,000 packages in nixpkgs — one of the largest repos",
+    "Tip: NixOS has ~100,000 packages in nixpkgs \u{2014} one of the \
+     largest repos",
 ];
 
 /// Installation screen state
 pub struct InstallationScreen {
-    /// Application theme
-    theme: AppTheme,
     /// Current installation progress
     progress: Option<InstallProgress>,
     /// Log lines
@@ -68,11 +62,11 @@ pub struct InstallationScreen {
     is_mock: bool,
 }
 
+#[allow(dead_code)]
 impl InstallationScreen {
     /// Create a new installation screen
     pub fn new() -> Self {
         Self {
-            theme: AppTheme::new(),
             progress: None,
             log_lines: Vec::new(),
             is_running: false,
@@ -106,11 +100,11 @@ impl InstallationScreen {
     }
 
     /// Retry the installation after a failure
-    fn retry_installation(&mut self) {
+    pub fn retry_installation(&mut self) {
         if let (Some(config), Some(root_path)) =
             (self.last_config.clone(), self.last_root_path.clone())
         {
-            self.log_lines.push("".to_string());
+            self.log_lines.push(String::new());
             self.log_lines
                 .push("=== Retrying installation ===".to_string());
 
@@ -141,15 +135,20 @@ impl InstallationScreen {
                     InstallMessage::Success => {
                         self.is_running = false;
                         self.is_complete = true;
-                        self.log_lines
-                            .push("✓ Installation completed successfully!".to_string());
+                        self.log_lines.push(format!(
+                            "{} Installation completed successfully!",
+                            icons::SUCCESS
+                        ));
                     }
                     InstallMessage::Error(err) => {
                         self.is_running = false;
                         self.has_error = true;
                         self.error_message = Some(err.clone());
-                        self.log_lines
-                            .push(format!("✗ Installation failed: {}", err));
+                        self.log_lines.push(format!(
+                            "{} Installation failed: {}",
+                            icons::ERROR,
+                            err
+                        ));
                     }
                 }
             }
@@ -183,22 +182,59 @@ impl InstallationScreen {
                 }
                 InstallStage::Verifying => "Verifying installation...".to_string(),
                 InstallStage::Complete => "Installation complete!".to_string(),
-                InstallStage::Failed(ref err) => format!("Installation failed: {}", err),
+                InstallStage::Failed(ref err) => {
+                    format!("Installation failed: {}", err)
+                }
             }
         } else {
             "Initializing...".to_string()
         }
     }
-}
 
-impl Default for InstallationScreen {
-    fn default() -> Self {
-        Self::new()
+    /// Whether this screen can proceed
+    pub fn can_proceed(&self) -> bool {
+        self.is_complete
     }
-}
 
-impl Screen for InstallationScreen {
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
+    /// Whether this screen can go back
+    pub fn can_go_back(&self) -> bool {
+        false // Cannot go back during/after installation
+    }
+
+    /// Title of this screen
+    pub fn title(&self) -> &str {
+        "Installing NixOS"
+    }
+
+    /// Help content for this screen
+    pub fn help_content(&self) -> Vec<String> {
+        vec![
+            "# Installation Progress Screen".to_string(),
+            "".to_string(),
+            "NixOS is being installed to your system. This process may take".to_string(),
+            "20-60 minutes depending on your internet connection and hardware.".to_string(),
+            "".to_string(),
+            "## What's Happening".to_string(),
+            "".to_string(),
+            "1. Generating Configuration: Creating your system configuration \
+             files"
+                .to_string(),
+            "2. Hardware Detection: Detecting and configuring hardware".to_string(),
+            "3. Installing Packages: Downloading and building system packages".to_string(),
+            "4. Verification: Ensuring installation completed successfully".to_string(),
+            "".to_string(),
+            "## Important Notes".to_string(),
+            "".to_string(),
+            "- Do not interrupt the installation once it has started".to_string(),
+            "- Keep your internet connection stable".to_string(),
+            "- If installation fails, check the log for error details".to_string(),
+        ]
+    }
+
+    /// Render this screen as a gpui element tree.
+    pub fn view(&mut self) -> impl IntoElement {
+        let theme = AppTheme::new();
+
         // Update installation state
         self.update();
 
@@ -211,19 +247,14 @@ impl Screen for InstallationScreen {
             }
         }
 
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3), // Title
-                Constraint::Length(4), // Progress bar
-                Constraint::Length(3), // Current operation
-                Constraint::Length(3), // Tip
-                Constraint::Min(8),    // Log output
-                Constraint::Length(3), // Status/Navigation
-            ])
-            .split(area);
+        let mut col = div()
+            .flex()
+            .flex_col()
+            .size_full()
+            .gap(px(spacing::MEDIUM))
+            .p(px(spacing::LARGE));
 
-        // Title
+        // === Title ===
         let title = if self.has_error {
             "Installation Failed"
         } else if self.is_complete {
@@ -232,198 +263,141 @@ impl Screen for InstallationScreen {
             "Installing NixOS"
         };
 
-        let title_para = Paragraph::new(vec![
-            Line::from(""),
-            Line::from(Span::styled(
-                title,
-                Style::default()
-                    .fg(if self.has_error {
-                        self.theme.error
-                    } else if self.is_complete {
-                        self.theme.success
-                    } else {
-                        self.theme.primary
-                    })
-                    .add_modifier(Modifier::BOLD),
-            )),
-        ])
-        .alignment(ratatui::layout::Alignment::Center);
-        frame.render_widget(title_para, chunks[0]);
+        let title_color = if self.has_error {
+            theme.error
+        } else if self.is_complete {
+            theme.success
+        } else {
+            theme.primary
+        };
 
-        // Progress bar
+        col = col.child(
+            div()
+                .w_full()
+                .flex()
+                .justify_center()
+                .pt(px(spacing::MEDIUM))
+                .child(
+                    div()
+                        .text_color(title_color)
+                        .font_weight(FontWeight::BOLD)
+                        .text_xl()
+                        .child(title),
+                ),
+        );
+
+        // === Progress bar ===
         let percent = self.progress.as_ref().map(|p| p.percent).unwrap_or(0);
         let mut progress_bar =
             ProgressBar::new(percent as u16).with_label(format!("Progress: {}%", percent));
 
         if self.has_error {
-            progress_bar = progress_bar.with_color(self.theme.error);
+            progress_bar = progress_bar.with_color(theme.error);
         } else if self.is_complete {
-            progress_bar = progress_bar.with_color(self.theme.success);
+            progress_bar = progress_bar.with_color(theme.success);
         }
 
-        Component::render(&mut progress_bar, frame, chunks[1]);
+        col = col.child(div().w_full().px(px(spacing::MEDIUM)).child(progress_bar));
 
-        // Current operation
-        let operation_text = self.stage_description();
-        let operation_para = Paragraph::new(vec![
-            Line::from(""),
-            Line::from(Span::styled(
-                operation_text,
-                Style::default().add_modifier(Modifier::ITALIC),
-            )),
-        ])
-        .alignment(ratatui::layout::Alignment::Center);
-        frame.render_widget(operation_para, chunks[2]);
+        // === Current operation ===
+        let operation_text: SharedString = self.stage_description().into();
+        col = col.child(
+            div().w_full().flex().justify_center().child(
+                div()
+                    .text_color(theme.foreground)
+                    .text_sm()
+                    .child(operation_text),
+            ),
+        );
 
-        // Tip display
+        // === Tip display ===
         if self.is_running {
-            let tip = INSTALL_TIPS[self.tip_index];
-            let tip_para = Paragraph::new(vec![
-                Line::from(""),
-                Line::from(Span::styled(tip, Style::default().fg(self.theme.info))),
-            ])
-            .alignment(ratatui::layout::Alignment::Center);
-            frame.render_widget(tip_para, chunks[3]);
+            let tip: SharedString = INSTALL_TIPS[self.tip_index].to_string().into();
+            col = col.child(
+                div()
+                    .w_full()
+                    .flex()
+                    .justify_center()
+                    .child(div().text_color(theme.info).text_sm().child(tip)),
+            );
         }
 
-        // Log output
-        let log_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Installation Log ")
-            .border_style(self.theme.border_style());
+        // === Log output ===
+        let log_title: SharedString = " Installation Log ".into();
 
-        let visible_lines = chunks[4].height.saturating_sub(2) as usize;
+        // Calculate visible window (show ~20 lines centered on
+        // scroll_position)
+        let visible_lines = 20_usize;
         let start_idx = self.scroll_position.saturating_sub(visible_lines / 2);
         let end_idx = (start_idx + visible_lines).min(self.log_lines.len());
 
-        let log_items: Vec<ListItem<'_>> = self.log_lines[start_idx..end_idx]
-            .iter()
-            .map(|line| {
-                let style = if line.starts_with('✓') {
-                    Style::default().fg(self.theme.success)
-                } else if line.starts_with('✗') {
-                    Style::default().fg(self.theme.error)
-                } else {
-                    Style::default()
-                };
-                ListItem::new(Line::from(Span::styled(line.clone(), style)))
-            })
-            .collect();
+        let mut log_content = div()
+            .w_full()
+            .flex_1()
+            .border_1()
+            .border_color(theme.border)
+            .rounded(px(4.0))
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .child(
+                div()
+                    .w_full()
+                    .px(px(spacing::MEDIUM))
+                    .py(px(spacing::SMALL))
+                    .border_b_1()
+                    .border_color(theme.border)
+                    .text_color(theme.foreground)
+                    .font_weight(FontWeight::BOLD)
+                    .text_sm()
+                    .child(log_title),
+            );
 
-        let log_list = List::new(log_items).block(log_block);
-        frame.render_widget(log_list, chunks[4]);
+        for line in &self.log_lines[start_idx..end_idx] {
+            let line_color = if line.starts_with(icons::SUCCESS) {
+                theme.success
+            } else if line.starts_with(icons::ERROR) {
+                theme.error
+            } else {
+                theme.foreground
+            };
 
-        // Status and navigation
+            let line_text: SharedString = line.clone().into();
+            log_content = log_content.child(
+                div()
+                    .px(px(spacing::MEDIUM))
+                    .py(px(1.0))
+                    .text_color(line_color)
+                    .text_sm()
+                    .child(line_text),
+            );
+        }
+
+        col = col.child(log_content);
+
+        // === Navigation hints ===
         if self.is_complete {
-            render_navigation_hints(
-                frame,
-                &[("Enter", "Continue to completion screen")],
-                &self.theme,
-                chunks[5],
-            );
+            col = col.child(NavigationHints::new(vec![(
+                "Enter",
+                "Continue to completion screen",
+            )]));
         } else if self.has_error {
-            render_navigation_hints(
-                frame,
-                &[("q", "Exit"), ("r", "Retry"), ("↑↓", "Scroll log")],
-                &self.theme,
-                chunks[5],
-            );
+            col = col.child(NavigationHints::new(vec![
+                ("q", "Exit"),
+                ("r", "Retry"),
+                ("Up/Down", "Scroll log"),
+            ]));
         } else {
-            // Show a plain message during installation
-            let nav_text = vec![Line::from(vec![
-                Span::raw("Installing... Please wait. "),
-                Span::styled("↑↓", self.theme.shortcut()),
-                Span::raw(" Scroll log"),
-            ])];
-            let nav_para = Paragraph::new(nav_text).alignment(ratatui::layout::Alignment::Center);
-            frame.render_widget(nav_para, chunks[5]);
-        }
-    }
-
-    fn handle_input(&mut self, key: KeyCode) -> ScreenAction {
-        // Handle quit only when installation is complete or has error
-        if self.has_error || self.is_complete {
-            if let Some(action) = self.handle_standard_input(key) {
-                return action;
-            }
+            col = col.child(NavigationHints::new(vec![("Up/Down", "Scroll log")]));
         }
 
-        // Handle screen-specific keys
-        match key {
-            KeyCode::Enter if self.is_complete => ScreenAction::Next,
-            KeyCode::Char('r') if self.has_error => {
-                self.retry_installation();
-                ScreenAction::None
-            }
-            KeyCode::Up => {
-                self.scroll_up();
-                ScreenAction::None
-            }
-            KeyCode::Down => {
-                self.scroll_down();
-                ScreenAction::None
-            }
-            _ => ScreenAction::None,
-        }
+        col
     }
+}
 
-    fn on_enter(&mut self) {
-        // Installation will be started by the main app
-    }
-
-    fn title(&self) -> &str {
-        "Installing NixOS"
-    }
-
-    fn help_content(&self) -> Vec<String> {
-        vec![
-            "# Installation Progress Screen".to_string(),
-            "".to_string(),
-            "NixOS is being installed to your system. This process may take".to_string(),
-            "20-60 minutes depending on your internet connection and hardware.".to_string(),
-            "".to_string(),
-            "## What's Happening".to_string(),
-            "".to_string(),
-            "1. Generating Configuration: Creating your system configuration files".to_string(),
-            "2. Hardware Detection: Detecting and configuring hardware".to_string(),
-            "3. Installing Packages: Downloading and building system packages".to_string(),
-            "4. Verification: Ensuring installation completed successfully".to_string(),
-            "".to_string(),
-            "## Progress Indicator".to_string(),
-            "".to_string(),
-            "The progress bar shows estimated completion:".to_string(),
-            "- 0-20%: Configuration generation".to_string(),
-            "- 20-30%: Hardware detection".to_string(),
-            "- 30-90%: Package installation (most time spent here)".to_string(),
-            "- 90-100%: Verification".to_string(),
-            "".to_string(),
-            "## Installation Log".to_string(),
-            "".to_string(),
-            "The log shows real-time output from the installation process.".to_string(),
-            "Use ↑ and ↓ arrow keys to scroll through the log.".to_string(),
-            "".to_string(),
-            "## Important Notes".to_string(),
-            "".to_string(),
-            "- Do not interrupt the installation once it has started".to_string(),
-            "- Keep your internet connection stable".to_string(),
-            "- The system may appear to hang during package building - this is normal".to_string(),
-            "- If installation fails, check the log for error details".to_string(),
-            "".to_string(),
-            "## After Installation".to_string(),
-            "".to_string(),
-            "Once complete, you'll be able to:".to_string(),
-            "- Review the installation summary".to_string(),
-            "- Reboot into your new NixOS system".to_string(),
-            "- Access installation logs for troubleshooting".to_string(),
-        ]
-    }
-
-    fn can_proceed(&self) -> bool {
-        self.is_complete
-    }
-
-    fn can_go_back(&self) -> bool {
-        false // Cannot go back during/after installation
+impl Default for InstallationScreen {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -485,5 +459,117 @@ mod tests {
         let help = screen.help_content();
         assert!(!help.is_empty());
         assert!(help[0].contains("Installation Progress"));
+    }
+
+    #[test]
+    fn test_stage_description_initializing() {
+        let screen = InstallationScreen::new();
+        assert_eq!(screen.stage_description(), "Initializing...");
+    }
+
+    #[test]
+    fn test_stage_description_with_progress() {
+        let mut screen = InstallationScreen::new();
+        screen.progress = Some(InstallProgress {
+            stage: InstallStage::Installing,
+            percent: 50,
+            operation: "Installing...".to_string(),
+            log_line: None,
+        });
+        assert_eq!(
+            screen.stage_description(),
+            "Installing NixOS (this may take a while)..."
+        );
+    }
+
+    #[test]
+    fn test_stage_description_complete() {
+        let mut screen = InstallationScreen::new();
+        screen.progress = Some(InstallProgress {
+            stage: InstallStage::Complete,
+            percent: 100,
+            operation: "Done".to_string(),
+            log_line: None,
+        });
+        assert_eq!(screen.stage_description(), "Installation complete!");
+    }
+
+    #[test]
+    fn test_stage_description_failed() {
+        let mut screen = InstallationScreen::new();
+        screen.progress = Some(InstallProgress {
+            stage: InstallStage::Failed("disk error".to_string()),
+            percent: 30,
+            operation: "Failed".to_string(),
+            log_line: None,
+        });
+        assert!(screen.stage_description().contains("disk error"));
+    }
+
+    #[test]
+    fn test_default_impl() {
+        let screen = InstallationScreen::default();
+        assert!(!screen.is_running);
+        assert!(!screen.is_complete);
+        assert!(!screen.has_error);
+        assert!(screen.progress.is_none());
+        assert!(screen.log_lines.is_empty());
+    }
+
+    #[test]
+    fn test_scroll_down_at_end() {
+        let mut screen = InstallationScreen::new();
+        screen.log_lines = vec!["Line 1".to_string()];
+        screen.scroll_position = 0;
+
+        // Can't scroll past end
+        screen.scroll_down();
+        assert_eq!(screen.scroll_position, 0);
+    }
+
+    #[test]
+    fn test_scroll_empty_log() {
+        let mut screen = InstallationScreen::new();
+        // Empty log, scroll should be safe
+        screen.scroll_up();
+        assert_eq!(screen.scroll_position, 0);
+        screen.scroll_down();
+        assert_eq!(screen.scroll_position, 0);
+    }
+
+    #[test]
+    fn test_install_tips_count() {
+        assert_eq!(INSTALL_TIPS.len(), 10);
+        for tip in INSTALL_TIPS {
+            assert!(!tip.is_empty());
+            assert!(tip.starts_with("Tip:"));
+        }
+    }
+
+    #[test]
+    fn test_error_state() {
+        let mut screen = InstallationScreen::new();
+        screen.has_error = true;
+        screen.error_message = Some("Disk write failed".to_string());
+
+        assert!(!screen.can_proceed());
+        assert!(!screen.can_go_back());
+        assert!(screen.error_message.is_some());
+    }
+
+    #[test]
+    fn test_retry_without_config() {
+        let mut screen = InstallationScreen::new();
+        // Retry without a previous config should be a no-op
+        screen.retry_installation();
+        assert!(!screen.is_running);
+    }
+
+    #[test]
+    fn test_update_no_receiver() {
+        let mut screen = InstallationScreen::new();
+        // Update without receiver should be safe
+        screen.update();
+        assert!(screen.progress.is_none());
     }
 }

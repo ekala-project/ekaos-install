@@ -1,11 +1,11 @@
-//! Ekaos Install - NixOS Installation TUI
+//! Ekaos Install - NixOS Installation GUI
 //!
-//! A terminal user interface application that guides users through installing NixOS.
+//! A native GUI application that guides users through installing NixOS.
 //!
 //! # Modules
 //!
 //! - `app`: Application state and wizard flow control
-//! - `ui`: TUI components and screens
+//! - `ui`: GUI components and screens (gpui-based)
 //! - `system`: System command execution and validation
 //! - `nixos`: NixOS-specific operations (disk, partition, install)
 //! - `config`: Configuration data model and generation

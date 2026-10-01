@@ -3,6 +3,13 @@
   fenix,
   pkg-config,
   openssl,
+  cmake,
+  vulkan-loader,
+  wayland,
+  libxkbcommon,
+  fontconfig,
+  freetype,
+  xorg,
 }:
 
 stdenv.mkDerivation {
@@ -16,7 +23,20 @@ stdenv.mkDerivation {
       "rustc"
       "rustfmt-preview"
     ])
+    pkg-config
+    cmake
   ];
 
-  buildInputs = [ ];
+  buildInputs = [
+    vulkan-loader
+    wayland
+    libxkbcommon
+    fontconfig
+    freetype
+    xorg.libX11
+    xorg.libXcursor
+    xorg.libXrandr
+    xorg.libXi
+    xorg.libxcb
+  ];
 }

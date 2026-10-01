@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-ekaos-install is a terminal user interface (TUI) for guided NixOS installation. Built in Rust with ratatui, it walks users through a 7-screen wizard: pre-flight checks, boot mode selection, disk selection, partition planning, system configuration, installation, and completion.
+ekaos-install is a native GUI application for guided NixOS installation. Built in Rust with gpui (GPU-accelerated UI framework), it walks users through a 7-screen wizard: pre-flight checks, disk selection, partition planning, system configuration, confirmation, installation, and completion.
 
 ## Rules
 
@@ -13,10 +13,11 @@ ekaos-install is a terminal user interface (TUI) for guided NixOS installation. 
 
 ## Hard Constraints
 
-- **MSRV 1.74** (see `Cargo.toml` `rust-version`).
+- **MSRV 1.80** (see `Cargo.toml` `rust-version`).
 - **No external mocking frameworks.** Tests use the built-in `CommandExecutor` trait with `Real`/`Mock` implementations.
 - **CI runs `clippy` with `-D warnings`** — all warnings are errors.
 - **rustfmt config** (`rustfmt.toml`): edition 2021, max_width 100, 4-space indentation, Unix line endings.
+- **GPU required** — gpui requires a GPU and display server (Wayland/X11 on Linux, Metal on macOS).
 
 ## Repository Layout
 
@@ -29,7 +30,7 @@ rustfmt.toml                        # Rust formatting configuration
 LICENSE                             # GPLv3
 
 nix/
-  dev-shell.nix                     # Dev environment (Rust toolchain, qemu, etc.)
+  dev-shell.nix                     # Dev environment (Rust toolchain, GPU libs, etc.)
   package.nix                       # Nix package definition
   overlay.nix                       # Nix overlay for local packages
 
@@ -38,7 +39,7 @@ scripts/
   setup-vm.sh                       # VM setup script
 
 src/
-  main.rs                           # Entry point: terminal setup, event loop, cleanup
+  main.rs                           # Entry point: gpui Application, InstallerRoot view, keybindings
   lib.rs                            # Library root, module exports
   error.rs                          # Error types (InstallerError, domain-specific errors)
 
@@ -46,31 +47,34 @@ src/
     mod.rs
     state.rs                        # Screen enum, App struct, navigation logic
 
-  ui/                               # TUI rendering
-    mod.rs
-    layout.rs                       # Layout system
-    theme.rs                        # Color/styling configuration
-    utils/                          # UI utilities (input handling, navigation)
-    screens/                        # 7 wizard screens
-      mod.rs                        #   Screen trait definition
+  ui/                               # GUI rendering (gpui-based)
+    mod.rs                          # Module exports, gpui actions definition
+    layout.rs                       # Header and Footer RenderOnce components
+    theme.rs                        # Color palette (Hsla), spacing, icons
+    utils/                          # UI utilities
+      mod.rs
+      input.rs                      # (placeholder — input handled via gpui actions)
+      navigation.rs                 # NavigationHints RenderOnce component
+    screens/                        # 7 wizard screens (each implements gpui::Render)
+      mod.rs                        #   Module declarations and re-exports
       welcome.rs                    #   Pre-flight checks (root, network, ISO, disk space)
       disk_selection.rs             #   Target disk selection
-      partition_planning.rs         #   Swap size, partition layout
+      partition_planning.rs         #   Swap size, partition layout, LUKS encryption
       configuration.rs              #   Hostname, user, timezone, locale, desktop
-      confirmation.rs               #   Review before install
+      confirmation.rs               #   Review before install (type DELETE gate)
       installation.rs               #   Real-time progress tracking
       success.rs                    #   Completion summary
     components/                     # Reusable UI widgets
-      mod.rs                        #   Component/Focusable/Validatable/Interactive traits
-      button.rs
-      checkbox.rs
-      dialog.rs
-      filterable_select.rs
-      help.rs
-      input.rs
-      message.rs
-      progress.rs
-      select.rs
+      mod.rs                        #   Validatable trait, module declarations
+      button.rs                     #   Button (RenderOnce)
+      checkbox.rs                   #   CheckboxList with view() method
+      dialog.rs                     #   ConfirmDialog with overlay
+      filterable_select.rs          #   FilterableSelectList with search/filter
+      help.rs                       #   HelpPanel overlay
+      input.rs                      #   InputField (Render, with FocusHandle)
+      message.rs                    #   StatusMessage (RenderOnce)
+      progress.rs                   #   ProgressBar (RenderOnce), Spinner
+      select.rs                     #   SelectList with view() method
 
   system/                           # System detection & command execution
     bootmode.rs                     # UEFI/BIOS detection
@@ -96,43 +100,43 @@ tests/
     mod.rs
 
 .github/workflows/
-  ci.yml                            # CI: test, fmt, clippy, build (ubuntu+macos), security audit
+  ci.yml                            # CI: test, fmt, clippy, build, security audit
 ```
 
 ## Architecture
 
 ### Wizard Flow
 
-The application is a state machine driven by `App` in `app/state.rs`. The `Screen` enum defines the 7 installation steps, and `App` manages transitions with validation and lifecycle hooks (`on_enter`/`on_exit`).
+The application is a state machine driven by `App` in `app/state.rs`. The `Screen` enum defines the 7 installation steps, and `App` manages transitions with validation.
 
 ```
 Welcome → DiskSelection → PartitionPlanning → Configuration → Confirmation → Installation → Complete
 ```
 
-### Key Traits
+### GUI Framework (gpui)
 
-| Trait | Location | Purpose |
-|-------|----------|---------|
-| `Screen` | `ui/screens/mod.rs` | Main wizard screen interface |
-| `Component` | `ui/components/mod.rs` | Base rendering interface |
-| `Focusable` | `ui/components/mod.rs` | Components that can receive focus |
-| `Validatable` | `ui/components/mod.rs` | Components with validation logic |
-| `Interactive` | `ui/components/mod.rs` | Keyboard input handling |
-| `CommandExecutor` | `system/command.rs` | Abstracted command execution (Real/Mock) |
+The UI uses gpui, a GPU-accelerated hybrid immediate/retained mode framework. Key patterns:
+
+- **Render trait**: Stateful views implement `gpui::Render` with `fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement`
+- **RenderOnce trait**: Stateless components implement `gpui::RenderOnce` (consumed on render)
+- **Element tree**: Built with `div()` and fluent styling methods (Tailwind-like)
+- **Layout**: CSS Flexbox via Taffy engine
+- **Actions**: Typed event structs dispatched through key bindings (`gpui::actions!` macro)
+- **State**: Owned by the root `InstallerRoot` view; screens are plain structs with `view()` methods
 
 ### Key Types
 
 | Type | Location | Purpose |
 |------|----------|---------|
+| `InstallerRoot` | `main.rs` | Root gpui view, owns all screens |
 | `App` | `app/state.rs` | Application state machine |
 | `Screen` (enum) | `app/state.rs` | 7 wizard screens |
 | `InstallConfig` | `config/mod.rs` | Full installation configuration |
 | `UserConfig` | `config/mod.rs` | Username, password, admin flag |
 | `BootLoader` | `config/mod.rs` | SystemdBoot or Grub |
 | `Disk` | `nixos/disk.rs` | Disk info (name, path, size, type) |
-| `DiskType` | `nixos/disk.rs` | Disk/Ssd/Nvme/Loop/Rom/Unknown |
 | `InstallerError` | `error.rs` | Top-level error wrapper |
-| `TerminalGuard` | `main.rs` | RAII terminal state cleanup |
+| `AppTheme` | `ui/theme.rs` | Color palette (Hsla values) |
 
 ### Mock Mode
 
@@ -154,9 +158,16 @@ Runtime tools (provided by Nix dev shell):
 - `git` — Version control
 - `qemu` — VM testing (development only)
 
+System libraries (for gpui):
+
+- `vulkan-loader` — GPU rendering
+- `wayland` / `libX11` — Display server
+- `libxkbcommon` — Keyboard handling
+- `fontconfig` / `freetype` — Font rendering
+
 Rust crate dependencies:
 
-- **TUI**: ratatui 0.26, crossterm 0.27
+- **GUI**: gpui 0.2
 - **CLI**: clap 4.5 (derive)
 - **Error handling**: anyhow 1.0, thiserror 1.0
 - **Logging**: tracing 0.1, tracing-subscriber 0.3
@@ -166,15 +177,16 @@ Rust crate dependencies:
 
 ### Adding a New Screen
 
-1. Create `src/ui/screens/<name>.rs` implementing the `Screen` trait
+1. Create `src/ui/screens/<name>.rs` with a struct implementing `gpui::Render`
 2. Add the variant to `Screen` enum in `app/state.rs`
 3. Add navigation transitions in `App`
 4. Register the module in `ui/screens/mod.rs`
+5. Add the screen to `InstallerRoot` in `main.rs`
 
 ### Adding a New UI Component
 
 1. Create `src/ui/components/<name>.rs`
-2. Implement `Component` and optionally `Focusable`, `Validatable`, `Interactive`
+2. Implement `gpui::Render` (stateful) or `gpui::RenderOnce` (stateless)
 3. Register the module in `ui/components/mod.rs`
 
 ### Adding a New System Detection

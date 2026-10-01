@@ -1,18 +1,18 @@
 //! Selection list component
 //!
-//! Single-select list with keyboard navigation
+//! `SelectList<T>` is a single-select list. It is a pure data struct with
+//! navigation methods and a `view()` method that returns an `impl IntoElement`.
+//! The parent screen is responsible for focus and keyboard routing.
 
-use ratatui::{
-    Frame,
-    layout::Rect,
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem},
-};
+use gpui::prelude::*;
+use gpui::{div, px, FontWeight, IntoElement, SharedString};
 
-use super::{Component, Focusable, InputEvent, Interactive};
+use crate::ui::theme::{icons, spacing, AppTheme};
 
-/// Single-select list component
+/// Single-select list component.
+///
+/// This is a data struct, not a gpui entity. The parent screen owns focus
+/// and calls navigation methods, then calls `view(focused)` to render.
 pub struct SelectList<T> {
     /// List title
     title: String,
@@ -20,15 +20,11 @@ pub struct SelectList<T> {
     items: Vec<SelectItem<T>>,
     /// Currently selected index
     selected: usize,
-    /// Whether the component is focused
-    focused: bool,
-    /// Whether the component is enabled
-    enabled: bool,
-    /// Show descriptions
+    /// Whether to show descriptions
     show_descriptions: bool,
 }
 
-/// An item in the selection list
+/// An item in the selection list.
 #[derive(Clone)]
 pub struct SelectItem<T> {
     /// Display label
@@ -37,12 +33,12 @@ pub struct SelectItem<T> {
     pub description: Option<String>,
     /// Associated value
     pub value: T,
-    /// Whether this item is enabled
+    /// Whether this item is enabled (selectable)
     pub enabled: bool,
 }
 
 impl<T> SelectItem<T> {
-    /// Create a new select item
+    /// Create a new select item.
     pub fn new(label: impl Into<String>, value: T) -> Self {
         Self {
             label: label.into(),
@@ -52,13 +48,13 @@ impl<T> SelectItem<T> {
         }
     }
 
-    /// Add a description
+    /// Add a description.
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
         self
     }
 
-    /// Set enabled state
+    /// Set enabled state.
     pub fn with_enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
@@ -66,201 +62,176 @@ impl<T> SelectItem<T> {
 }
 
 impl<T> SelectList<T> {
-    /// Create a new selection list
+    /// Create a new selection list.
     pub fn new(title: impl Into<String>) -> Self {
         Self {
             title: title.into(),
             items: Vec::new(),
             selected: 0,
-            focused: false,
-            enabled: true,
             show_descriptions: false,
         }
     }
 
-    /// Add an item to the list
+    /// Add an item to the list.
     pub fn add_item(mut self, item: SelectItem<T>) -> Self {
         self.items.push(item);
         self
     }
 
-    /// Add multiple items
+    /// Set items from a vector.
     pub fn with_items(mut self, items: Vec<SelectItem<T>>) -> Self {
         self.items = items;
         self
     }
 
-    /// Show descriptions for items
+    /// Enable description display.
     pub fn show_descriptions(mut self, show: bool) -> Self {
         self.show_descriptions = show;
         self
     }
 
-    /// Get the currently selected item
+    /// Get the currently selected item.
     pub fn selected(&self) -> Option<&SelectItem<T>> {
         self.items.get(self.selected)
     }
 
-    /// Get the selected index
+    /// Get the selected index.
     pub fn selected_index(&self) -> usize {
         self.selected
     }
 
-    /// Set the selected index
+    /// Set the selected index.
     pub fn set_selected(&mut self, index: usize) {
         if index < self.items.len() {
             self.selected = index;
         }
     }
 
-    /// Move selection up
-    fn move_up(&mut self) {
+    /// Move selection up, skipping disabled items.
+    pub fn move_up(&mut self) {
         if self.selected > 0 {
             self.selected -= 1;
-            // Skip disabled items
             while self.selected > 0 && !self.items[self.selected].enabled {
                 self.selected -= 1;
             }
         }
     }
 
-    /// Move selection down
-    fn move_down(&mut self) {
+    /// Move selection down, skipping disabled items.
+    pub fn move_down(&mut self) {
         if self.selected < self.items.len().saturating_sub(1) {
             self.selected += 1;
-            // Skip disabled items
             while self.selected < self.items.len() - 1 && !self.items[self.selected].enabled {
                 self.selected += 1;
             }
         }
     }
 
-    /// Get number of items
+    /// Get number of items.
     pub fn len(&self) -> usize {
         self.items.len()
     }
 
-    /// Check if list is empty
+    /// Check if list is empty.
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
-}
 
-impl<T> Focusable for SelectList<T> {
-    fn is_focused(&self) -> bool {
-        self.focused
-    }
+    /// Build a gpui element tree for this list.
+    ///
+    /// `focused` indicates whether the parent considers this list focused.
+    pub fn view(&self, focused: bool) -> impl IntoElement {
+        let theme = AppTheme::new();
 
-    fn set_focused(&mut self, focused: bool) {
-        self.focused = focused;
-    }
-}
+        let border_color = if focused { theme.primary } else { theme.border };
 
-impl<T> Interactive for SelectList<T> {
-    fn handle_input(&mut self, event: InputEvent) -> bool {
-        if !self.enabled {
-            return false;
+        let title: SharedString = self.title.clone().into();
+
+        let mut container = div()
+            .w_full()
+            .border_1()
+            .border_color(border_color)
+            .rounded(px(4.0))
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            // Title bar
+            .child(
+                div()
+                    .px(px(spacing::MEDIUM))
+                    .py(px(spacing::SMALL))
+                    .border_b_1()
+                    .border_color(border_color)
+                    .text_color(if focused {
+                        theme.primary
+                    } else {
+                        theme.foreground
+                    })
+                    .text_sm()
+                    .font_weight(FontWeight::BOLD)
+                    .child(title),
+            );
+
+        // Item rows
+        for (i, item) in self.items.iter().enumerate() {
+            let is_selected = i == self.selected;
+
+            let indicator: SharedString = if is_selected {
+                format!("{} ", icons::SELECTION).into()
+            } else {
+                "  ".into()
+            };
+
+            let label: SharedString = item.label.clone().into();
+
+            let (text_color, weight) = if !item.enabled {
+                (theme.muted, FontWeight::NORMAL)
+            } else if is_selected {
+                (theme.primary, FontWeight::BOLD)
+            } else {
+                (theme.foreground, FontWeight::NORMAL)
+            };
+
+            let mut row = div()
+                .w_full()
+                .px(px(spacing::MEDIUM))
+                .py(px(spacing::SMALL))
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .child(
+                            div()
+                                .text_color(if is_selected {
+                                    theme.primary
+                                } else {
+                                    theme.foreground
+                                })
+                                .font_weight(FontWeight::BOLD)
+                                .child(indicator),
+                        )
+                        .child(
+                            div()
+                                .text_color(text_color)
+                                .font_weight(weight)
+                                .child(label),
+                        ),
+                );
+
+            // Description
+            if self.show_descriptions {
+                if let Some(desc) = &item.description {
+                    let desc_text: SharedString = format!("    {}", desc).into();
+                    row = row.child(div().text_color(theme.muted).text_sm().child(desc_text));
+                }
+            }
+
+            container = container.child(row);
         }
 
-        match event {
-            InputEvent::Up => {
-                self.move_up();
-                true
-            }
-            InputEvent::Down => {
-                self.move_down();
-                true
-            }
-            InputEvent::Enter => true,
-            _ => false,
-        }
-    }
-}
-
-impl<T> Component for SelectList<T> {
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        let border_color = if !self.enabled {
-            Color::DarkGray
-        } else if self.focused {
-            Color::Cyan
-        } else {
-            Color::White
-        };
-
-        let border_style = if self.focused {
-            Style::default()
-                .fg(border_color)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(border_color)
-        };
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(self.title.as_str())
-            .border_style(border_style);
-
-        let items: Vec<ListItem<'_>> = self
-            .items
-            .iter()
-            .enumerate()
-            .map(|(i, item)| {
-                let is_selected = i == self.selected;
-
-                let mut spans = Vec::new();
-
-                // Selection indicator
-                if is_selected {
-                    spans.push(Span::styled(
-                        "▶ ",
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
-                    ));
-                } else {
-                    spans.push(Span::raw("  "));
-                }
-
-                // Label
-                let label_style = if !item.enabled {
-                    Style::default().fg(Color::DarkGray)
-                } else if is_selected {
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Color::White)
-                };
-
-                spans.push(Span::styled(item.label.clone(), label_style));
-
-                let mut lines = vec![Line::from(spans)];
-
-                // Description if shown and available
-                if self.show_descriptions {
-                    if let Some(desc) = &item.description {
-                        lines.push(Line::from(Span::styled(
-                            format!("    {}", desc),
-                            Style::default().fg(Color::DarkGray),
-                        )));
-                    }
-                }
-
-                ListItem::new(lines)
-            })
-            .collect();
-
-        let list = List::new(items).block(block);
-
-        frame.render_widget(list, area);
-    }
-
-    fn title(&self) -> Option<&str> {
-        Some(&self.title)
-    }
-
-    fn is_enabled(&self) -> bool {
-        self.enabled
+        container
     }
 }
 
@@ -296,17 +267,17 @@ mod tests {
 
         assert_eq!(list.selected_index(), 0);
 
-        list.handle_input(InputEvent::Down);
+        list.move_down();
         assert_eq!(list.selected_index(), 1);
 
-        list.handle_input(InputEvent::Down);
+        list.move_down();
         assert_eq!(list.selected_index(), 2);
 
         // Should not go beyond last item
-        list.handle_input(InputEvent::Down);
+        list.move_down();
         assert_eq!(list.selected_index(), 2);
 
-        list.handle_input(InputEvent::Up);
+        list.move_up();
         assert_eq!(list.selected_index(), 1);
     }
 
@@ -317,8 +288,62 @@ mod tests {
             .add_item(SelectItem::new("Option 2", 2).with_enabled(false))
             .add_item(SelectItem::new("Option 3", 3));
 
-        list.handle_input(InputEvent::Down);
+        list.move_down();
         // Should skip disabled option 2
         assert_eq!(list.selected_index(), 2);
+    }
+
+    #[test]
+    fn test_select_set_selected() {
+        let mut list: SelectList<i32> = SelectList::new("Choose")
+            .add_item(SelectItem::new("A", 1))
+            .add_item(SelectItem::new("B", 2))
+            .add_item(SelectItem::new("C", 3));
+
+        list.set_selected(2);
+        assert_eq!(list.selected_index(), 2);
+        assert_eq!(list.selected().unwrap().label, "C");
+
+        // Out of range should not change
+        list.set_selected(10);
+        assert_eq!(list.selected_index(), 2);
+    }
+
+    #[test]
+    fn test_select_item_builder() {
+        let item = SelectItem::new("Label", 42)
+            .with_description("A description")
+            .with_enabled(false);
+
+        assert_eq!(item.label, "Label");
+        assert_eq!(item.value, 42);
+        assert_eq!(item.description.as_deref(), Some("A description"));
+        assert!(!item.enabled);
+    }
+
+    #[test]
+    fn test_select_move_up_at_top() {
+        let mut list: SelectList<i32> = SelectList::new("Choose")
+            .add_item(SelectItem::new("A", 1))
+            .add_item(SelectItem::new("B", 2));
+
+        list.move_up(); // Already at 0
+        assert_eq!(list.selected_index(), 0);
+    }
+
+    #[test]
+    fn test_select_empty() {
+        let list: SelectList<i32> = SelectList::new("Empty");
+        assert!(list.is_empty());
+        assert_eq!(list.len(), 0);
+        assert!(list.selected().is_none());
+    }
+
+    #[test]
+    fn test_select_show_descriptions() {
+        let list: SelectList<i32> = SelectList::new("Choose")
+            .show_descriptions(true)
+            .add_item(SelectItem::new("A", 1).with_description("First"));
+        assert!(list.show_descriptions);
     }
 }

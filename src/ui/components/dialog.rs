@@ -1,15 +1,17 @@
 //! Confirmation dialog component
+//!
+//! Centered popup overlay with Yes/No buttons.
+//! Pure data struct with navigation methods and a `view()` method.
 
-use ratatui::{
-    Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Clear, Paragraph},
-};
+use gpui::prelude::*;
+use gpui::{div, px, FontWeight, IntoElement, SharedString};
 
-use super::{Component, Focusable, InputEvent, Interactive};
+use crate::ui::theme::{spacing, AppTheme};
 
-/// Confirmation dialog with Yes/No buttons
+/// Confirmation dialog with Yes/No buttons.
+///
+/// Pure data struct; the parent renders it as an overlay and routes
+/// keyboard events to `navigate_left()`, `navigate_right()`, etc.
 pub struct ConfirmDialog {
     /// Dialog title
     title: String,
@@ -17,13 +19,11 @@ pub struct ConfirmDialog {
     message: String,
     /// Currently focused button (0=Yes, 1=No)
     focused_button: usize,
-    /// Whether the dialog is focused
-    focused: bool,
     /// Dialog type (affects color)
     dialog_type: DialogType,
 }
 
-/// Dialog type
+/// Dialog type variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DialogType {
     /// Normal confirmation (blue)
@@ -34,169 +34,181 @@ pub enum DialogType {
     Danger,
 }
 
-impl DialogType {
-    /// Get the color for this dialog type
-    pub fn color(&self) -> Color {
-        match self {
-            DialogType::Confirm => Color::Blue,
-            DialogType::Warning => Color::Yellow,
-            DialogType::Danger => Color::Red,
-        }
-    }
-}
-
 impl ConfirmDialog {
-    /// Create a new confirmation dialog
+    /// Create a new confirmation dialog. Defaults to "No" focused.
     pub fn new(title: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             title: title.into(),
             message: message.into(),
             focused_button: 1, // Default to "No"
-            focused: true,
             dialog_type: DialogType::Confirm,
         }
     }
 
-    /// Set dialog type
+    /// Set dialog type.
     pub fn with_type(mut self, dialog_type: DialogType) -> Self {
         self.dialog_type = dialog_type;
         self
     }
 
-    /// Create a warning dialog
+    /// Create a warning dialog.
     pub fn warning(title: impl Into<String>, message: impl Into<String>) -> Self {
         Self::new(title, message).with_type(DialogType::Warning)
     }
 
-    /// Create a danger dialog
+    /// Create a danger dialog.
     pub fn danger(title: impl Into<String>, message: impl Into<String>) -> Self {
         Self::new(title, message).with_type(DialogType::Danger)
     }
 
-    /// Get whether "Yes" is currently focused
+    /// Get whether "Yes" is currently focused.
     pub fn is_yes_focused(&self) -> bool {
         self.focused_button == 0
     }
 
-    /// Center a rect within another rect
-    fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-        let popup_layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Percentage((100 - percent_y) / 2),
-                Constraint::Percentage(percent_y),
-                Constraint::Percentage((100 - percent_y) / 2),
-            ])
-            .split(r);
-
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage((100 - percent_x) / 2),
-                Constraint::Percentage(percent_x),
-                Constraint::Percentage((100 - percent_x) / 2),
-            ])
-            .split(popup_layout[1])[1]
-    }
-}
-
-impl Focusable for ConfirmDialog {
-    fn is_focused(&self) -> bool {
-        self.focused
+    /// Toggle between Yes and No.
+    pub fn toggle_button(&mut self) {
+        self.focused_button = 1 - self.focused_button;
     }
 
-    fn set_focused(&mut self, focused: bool) {
-        self.focused = focused;
+    /// Select "No" (e.g. on Escape).
+    pub fn select_no(&mut self) {
+        self.focused_button = 1;
     }
-}
 
-impl Interactive for ConfirmDialog {
-    fn handle_input(&mut self, event: InputEvent) -> bool {
-        match event {
-            InputEvent::Left | InputEvent::Right | InputEvent::Tab => {
-                self.focused_button = 1 - self.focused_button;
-                true
-            }
-            InputEvent::Enter => true,
-            InputEvent::Escape => {
-                self.focused_button = 1; // Select "No" on escape
-                true
-            }
-            _ => false,
+    /// Get the dialog type.
+    pub fn dialog_type(&self) -> DialogType {
+        self.dialog_type
+    }
+
+    /// Get the dialog type color from the theme.
+    fn type_color(&self) -> gpui::Hsla {
+        let theme = AppTheme::new();
+        match self.dialog_type {
+            DialogType::Confirm => theme.info,
+            DialogType::Warning => theme.warning,
+            DialogType::Danger => theme.error,
         }
     }
-}
 
-impl Component for ConfirmDialog {
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        let color = self.dialog_type.color();
+    /// Build a gpui element tree for this dialog.
+    ///
+    /// Renders as a centered overlay. The parent should place this
+    /// on top of other content using absolute positioning.
+    pub fn view(&self) -> impl IntoElement {
+        let theme = AppTheme::new();
+        let type_color = self.type_color();
 
-        // Create centered popup
-        let popup_area = Self::centered_rect(60, 30, area);
+        let title: SharedString = self.title.clone().into();
+        let message: SharedString = self.message.clone().into();
 
-        // Clear the area
-        frame.render_widget(Clear, popup_area);
-
-        // Main dialog block
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(color).add_modifier(Modifier::BOLD))
-            .title(self.title.as_str());
-
-        frame.render_widget(block, popup_area);
-
-        // Split into message and buttons
-        let inner = popup_area.inner(&ratatui::layout::Margin {
-            vertical: 1,
-            horizontal: 1,
-        });
-
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Min(0), Constraint::Length(3)])
-            .split(inner);
-
-        // Render message
-        let message = Paragraph::new(self.message.as_str())
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(Color::White));
-        frame.render_widget(message, chunks[0]);
-
-        // Render buttons
-        let button_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(chunks[1]);
-
-        // Yes button
-        let yes_style = if self.focused_button == 0 {
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::Green)
-                .add_modifier(Modifier::BOLD)
+        // Build Yes button
+        let yes_button = if self.focused_button == 0 {
+            div()
+                .px(px(spacing::LARGE))
+                .py(px(spacing::SMALL))
+                .bg(theme.success)
+                .text_color(gpui::hsla(0.0, 0.0, 0.0, 1.0))
+                .font_weight(FontWeight::BOLD)
+                .rounded(px(4.0))
+                .flex()
+                .justify_center()
+                .child("[ Yes ]")
         } else {
-            Style::default().fg(Color::Green)
+            div()
+                .px(px(spacing::LARGE))
+                .py(px(spacing::SMALL))
+                .text_color(theme.success)
+                .font_weight(FontWeight::BOLD)
+                .rounded(px(4.0))
+                .border_1()
+                .border_color(theme.success)
+                .flex()
+                .justify_center()
+                .child("[ Yes ]")
         };
 
-        let yes_button = Paragraph::new("[ Yes ]")
-            .alignment(Alignment::Center)
-            .style(yes_style);
-        frame.render_widget(yes_button, button_chunks[0]);
-
-        // No button
-        let no_style = if self.focused_button == 1 {
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::Red)
-                .add_modifier(Modifier::BOLD)
+        // Build No button
+        let no_button = if self.focused_button == 1 {
+            div()
+                .px(px(spacing::LARGE))
+                .py(px(spacing::SMALL))
+                .bg(theme.error)
+                .text_color(gpui::hsla(0.0, 0.0, 0.0, 1.0))
+                .font_weight(FontWeight::BOLD)
+                .rounded(px(4.0))
+                .flex()
+                .justify_center()
+                .child("[ No ]")
         } else {
-            Style::default().fg(Color::Red)
+            div()
+                .px(px(spacing::LARGE))
+                .py(px(spacing::SMALL))
+                .text_color(theme.error)
+                .font_weight(FontWeight::BOLD)
+                .rounded(px(4.0))
+                .border_1()
+                .border_color(theme.error)
+                .flex()
+                .justify_center()
+                .child("[ No ]")
         };
 
-        let no_button = Paragraph::new("[ No ]")
-            .alignment(Alignment::Center)
-            .style(no_style);
-        frame.render_widget(no_button, button_chunks[1]);
+        // Outer overlay: semi-transparent backdrop
+        div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+            .bg(gpui::hsla(0.0, 0.0, 0.0, 0.6))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                // Dialog box
+                div()
+                    .w(px(400.0))
+                    .bg(theme.background)
+                    .border_2()
+                    .border_color(type_color)
+                    .rounded(px(8.0))
+                    .flex()
+                    .flex_col()
+                    .overflow_hidden()
+                    // Title bar
+                    .child(
+                        div()
+                            .w_full()
+                            .px(px(spacing::LARGE))
+                            .py(px(spacing::MEDIUM))
+                            .bg(type_color)
+                            .text_color(gpui::hsla(0.0, 0.0, 0.0, 1.0))
+                            .font_weight(FontWeight::BOLD)
+                            .child(title),
+                    )
+                    // Message
+                    .child(
+                        div()
+                            .w_full()
+                            .px(px(spacing::LARGE))
+                            .py(px(spacing::LARGE))
+                            .text_color(theme.foreground)
+                            .child(message),
+                    )
+                    // Button row
+                    .child(
+                        div()
+                            .w_full()
+                            .px(px(spacing::LARGE))
+                            .py(px(spacing::MEDIUM))
+                            .flex()
+                            .flex_row()
+                            .justify_center()
+                            .gap(px(spacing::LARGE))
+                            .child(yes_button)
+                            .child(no_button),
+                    ),
+            )
     }
 }
 
@@ -205,10 +217,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_confirm_dialog() {
+    fn test_confirm_dialog_creation() {
         let dialog = ConfirmDialog::new("Confirm", "Are you sure?");
         assert_eq!(dialog.focused_button, 1); // Defaults to No
         assert_eq!(dialog.dialog_type, DialogType::Confirm);
+        assert!(!dialog.is_yes_focused());
     }
 
     #[test]
@@ -217,11 +230,13 @@ mod tests {
 
         assert_eq!(dialog.focused_button, 1);
 
-        dialog.handle_input(InputEvent::Left);
+        dialog.toggle_button();
         assert_eq!(dialog.focused_button, 0);
+        assert!(dialog.is_yes_focused());
 
-        dialog.handle_input(InputEvent::Right);
+        dialog.toggle_button();
         assert_eq!(dialog.focused_button, 1);
+        assert!(!dialog.is_yes_focused());
     }
 
     #[test]
@@ -231,5 +246,28 @@ mod tests {
 
         let danger = ConfirmDialog::danger("Danger", "This is dangerous");
         assert_eq!(danger.dialog_type, DialogType::Danger);
+    }
+
+    #[test]
+    fn test_dialog_select_no() {
+        let mut dialog = ConfirmDialog::new("Test", "Message");
+        dialog.toggle_button(); // Now on Yes
+        assert!(dialog.is_yes_focused());
+
+        dialog.select_no();
+        assert!(!dialog.is_yes_focused());
+        assert_eq!(dialog.focused_button, 1);
+    }
+
+    #[test]
+    fn test_dialog_with_type() {
+        let dialog = ConfirmDialog::new("Test", "Message").with_type(DialogType::Danger);
+        assert_eq!(dialog.dialog_type, DialogType::Danger);
+    }
+
+    #[test]
+    fn test_dialog_type_accessor() {
+        let dialog = ConfirmDialog::warning("Warn", "msg");
+        assert_eq!(dialog.dialog_type(), DialogType::Warning);
     }
 }
