@@ -5,4 +5,4 @@
 
 pub mod state;
 
-pub use state::{App, AppMode, Screen};
+pub use state::{App, AppMode, InstallMode, Screen};

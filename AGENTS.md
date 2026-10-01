@@ -55,14 +55,15 @@ src/
       mod.rs
       input.rs                      # (placeholder — input handled via gpui actions)
       navigation.rs                 # NavigationHints RenderOnce component
-    screens/                        # 7 wizard screens (each implements gpui::Render)
+    screens/                        # 8 wizard screens (each implements gpui::Render)
       mod.rs                        #   Module declarations and re-exports
       welcome.rs                    #   Pre-flight checks (root, network, ISO, disk space)
       disk_selection.rs             #   Target disk selection
       partition_planning.rs         #   Swap size, partition layout, LUKS encryption
       configuration.rs              #   Hostname, user, timezone, locale, desktop
       confirmation.rs               #   Review before install (type DELETE gate)
-      installation.rs               #   Real-time progress tracking
+      fast_confirmation.rs          #   Fast install: root password + DELETE gate
+      installation.rs               #   Real-time progress tracking (normal + fast)
       success.rs                    #   Completion summary
     components/                     # Reusable UI widgets
       mod.rs                        #   Validatable trait, module declarations
@@ -85,6 +86,7 @@ src/
   nixos/                            # NixOS-specific operations
     config.rs                       # NixOS configuration generation
     disk.rs                         # Disk detection & parsing
+    image.rs                        # Disk image format detection & writing
     install.rs                      # Installation execution (async)
 
   config/                           # Configuration data model
@@ -107,11 +109,19 @@ tests/
 
 ### Wizard Flow
 
-The application is a state machine driven by `App` in `app/state.rs`. The `Screen` enum defines the 7 installation steps, and `App` manages transitions with validation.
+The application is a state machine driven by `App` in `app/state.rs`. The `Screen` enum defines the installation steps, and `App` manages transitions with validation. The `InstallMode` enum selects between Normal and Fast flows.
 
+**Normal mode** (7 steps — full NixOS install with partitioning and configuration):
 ```
 Welcome → DiskSelection → PartitionPlanning → Configuration → Confirmation → Installation → Complete
 ```
+
+**Fast mode** (4 steps — writes a pre-built disk image via `dd`):
+```
+Welcome → DiskSelection → FastConfirmation → Installation → Complete
+```
+
+Fast mode is activated with `--fast --image <path>`. It skips partitioning and system configuration, only requiring disk selection and a root password.
 
 ### GUI Framework (gpui)
 
@@ -130,11 +140,13 @@ The UI uses gpui, a GPU-accelerated hybrid immediate/retained mode framework. Ke
 |------|----------|---------|
 | `InstallerRoot` | `main.rs` | Root gpui view, owns all screens |
 | `App` | `app/state.rs` | Application state machine |
-| `Screen` (enum) | `app/state.rs` | 7 wizard screens |
+| `Screen` (enum) | `app/state.rs` | 8 wizard screens |
+| `InstallMode` | `app/state.rs` | Normal or Fast install mode |
 | `InstallConfig` | `config/mod.rs` | Full installation configuration |
 | `UserConfig` | `config/mod.rs` | Username, password, admin flag |
 | `BootLoader` | `config/mod.rs` | SystemdBoot or Grub |
 | `Disk` | `nixos/disk.rs` | Disk info (name, path, size, type) |
+| `ImageFormat` | `nixos/image.rs` | Disk image format (Raw, Qcow2, Iso, Vmdk, Vdi, Vhd, Vhdx, CompressedRaw) |
 | `InstallerError` | `error.rs` | Top-level error wrapper |
 | `AppTheme` | `ui/theme.rs` | Color palette (Hsla values) |
 

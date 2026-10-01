@@ -11,8 +11,8 @@ pub mod utils;
 
 pub use layout::{Footer, Header};
 pub use screens::{
-    ConfigurationScreen, ConfirmationScreen, DiskSelectionScreen, InstallationScreen,
-    PartitionPlanningScreen, SuccessScreen, WelcomeScreen,
+    ConfigurationScreen, ConfirmationScreen, DiskSelectionScreen, FastConfirmationScreen,
+    InstallationScreen, PartitionPlanningScreen, SuccessScreen, WelcomeScreen,
 };
 pub use theme::{icons, spacing, AppTheme};
 pub use utils::navigation::NavigationHints;

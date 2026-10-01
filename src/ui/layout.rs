@@ -8,7 +8,7 @@ use gpui::prelude::*;
 use gpui::{div, px, relative, FontWeight, IntoElement, SharedString};
 
 use super::theme::{spacing, AppTheme};
-use crate::app::Screen;
+use crate::app::{InstallMode, Screen};
 
 /// Header component showing step progress bar and screen title
 #[derive(IntoElement)]
@@ -17,19 +17,25 @@ pub struct Header {
     pub screen: Screen,
     /// Title text displayed in the header
     pub title: &'static str,
+    /// Install mode for step counting
+    pub install_mode: InstallMode,
 }
 
 impl Header {
     /// Create a new header for the given screen
-    pub fn new(screen: Screen, title: &'static str) -> Self {
-        Self { screen, title }
+    pub fn new(screen: Screen, title: &'static str, install_mode: InstallMode) -> Self {
+        Self {
+            screen,
+            title,
+            install_mode,
+        }
     }
 }
 
 impl RenderOnce for Header {
     fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         let theme = AppTheme::new();
-        let (current, total) = self.screen.step_number();
+        let (current, total) = self.screen.step_number_for_mode(self.install_mode);
         let progress_fraction = current as f32 / total as f32;
         let step_label: SharedString =
             format!("Step {} of {} \u{2014} {}", current, total, self.title).into();
@@ -75,12 +81,18 @@ pub struct Footer {
     pub screen: Screen,
     /// Whether the app is running in mock mode
     pub is_mock: bool,
+    /// Install mode for navigation awareness
+    pub install_mode: InstallMode,
 }
 
 impl Footer {
     /// Create a new footer for the given screen
-    pub fn new(screen: Screen, is_mock: bool) -> Self {
-        Self { screen, is_mock }
+    pub fn new(screen: Screen, is_mock: bool, install_mode: InstallMode) -> Self {
+        Self {
+            screen,
+            is_mock,
+            install_mode,
+        }
     }
 }
 
@@ -100,13 +112,13 @@ impl RenderOnce for Footer {
             .gap(px(spacing::MEDIUM));
 
         // Back hint (if navigable)
-        if self.screen.can_go_back() {
+        if self.screen.can_go_back_for_mode(self.install_mode) {
             row = row.child(hint_pair("\u{2190} Back", theme.primary));
             row = row.child(separator(theme.muted));
         }
 
         // Next / Finish hint
-        if self.screen.next().is_some() {
+        if self.screen.next_for_mode(self.install_mode).is_some() {
             row = row.child(hint_pair("\u{21b5} Next", theme.success));
             row = row.child(separator(theme.muted));
         }
@@ -156,19 +168,23 @@ mod tests {
 
     #[test]
     fn test_header_creation() {
-        let header = Header::new(Screen::Welcome, "Welcome to NixOS Installation");
+        let header = Header::new(
+            Screen::Welcome,
+            "Welcome to NixOS Installation",
+            InstallMode::Normal,
+        );
         assert_eq!(header.title, "Welcome to NixOS Installation");
     }
 
     #[test]
     fn test_footer_creation() {
-        let footer = Footer::new(Screen::Welcome, false);
+        let footer = Footer::new(Screen::Welcome, false, InstallMode::Normal);
         assert!(!footer.is_mock);
     }
 
     #[test]
     fn test_footer_mock_mode() {
-        let footer = Footer::new(Screen::DiskSelection, true);
+        let footer = Footer::new(Screen::DiskSelection, true, InstallMode::Normal);
         assert!(footer.is_mock);
     }
 
@@ -184,10 +200,26 @@ mod tests {
             Screen::Complete,
         ];
         for screen in &screens {
-            let header = Header::new(*screen, screen.title());
+            let header = Header::new(*screen, screen.title(), InstallMode::Normal);
             let (step, total) = header.screen.step_number();
             assert!((1..=7).contains(&step));
             assert_eq!(total, 7);
+        }
+    }
+
+    #[test]
+    fn test_header_fast_mode() {
+        let screens = [
+            Screen::Welcome,
+            Screen::DiskSelection,
+            Screen::FastConfirmation,
+            Screen::Installation,
+        ];
+        for screen in &screens {
+            let header = Header::new(*screen, screen.title(), InstallMode::Fast);
+            let (step, total) = header.screen.step_number_for_mode(InstallMode::Fast);
+            assert!((1..=4).contains(&step));
+            assert_eq!(total, 4);
         }
     }
 
@@ -199,5 +231,13 @@ mod tests {
         assert!(Screen::DiskSelection.can_go_back());
         // Installation cannot go back
         assert!(!Screen::Installation.can_go_back());
+    }
+
+    #[test]
+    fn test_footer_fast_mode_back_navigation() {
+        assert!(!Screen::Welcome.can_go_back_for_mode(InstallMode::Fast));
+        assert!(Screen::DiskSelection.can_go_back_for_mode(InstallMode::Fast));
+        assert!(Screen::FastConfirmation.can_go_back_for_mode(InstallMode::Fast));
+        assert!(!Screen::Installation.can_go_back_for_mode(InstallMode::Fast));
     }
 }

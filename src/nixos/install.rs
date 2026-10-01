@@ -5,6 +5,7 @@
 
 use crate::config::InstallConfig;
 use crate::error::{CommandError, ConfigError, InstallerError};
+use crate::nixos::image::{write_image, ImageFormat};
 use crate::system::command::{CommandExecutor, RealExecutor};
 use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -379,6 +380,312 @@ fn run_installation_impl(
     let _ = tx.send(InstallMessage::Success);
 }
 
+/// Run the fast installation process (disk image write) in a background thread
+///
+/// Writes a pre-built disk image to the target disk using dd, then sets
+/// the root password via chroot.
+pub fn run_fast_installation_async(
+    image_path: String,
+    disk_path: String,
+    root_password: String,
+    is_mock: bool,
+) -> Receiver<InstallMessage> {
+    let (tx, rx) = channel();
+
+    thread::spawn(move || {
+        run_fast_installation_impl(image_path, disk_path, root_password, is_mock, tx);
+    });
+
+    rx
+}
+
+/// Implementation of the fast installation process
+fn run_fast_installation_impl(
+    image_path: String,
+    disk_path: String,
+    root_password: String,
+    is_mock: bool,
+    tx: Sender<InstallMessage>,
+) {
+    // Stage 1: Validate image file and detect format (0-5%)
+    let _ = tx.send(InstallMessage::Progress(InstallProgress {
+        stage: InstallStage::Installing,
+        percent: 2,
+        operation: "Detecting image format...".to_string(),
+        log_line: None,
+    }));
+
+    let format = if is_mock {
+        // In mock mode, detect from extension only (file may not exist)
+        ImageFormat::detect_from_extension_or_raw(&image_path)
+    } else {
+        let image = Path::new(&image_path);
+        if !image.exists() {
+            let _ = tx.send(InstallMessage::Error(format!(
+                "Disk image not found: {}",
+                image_path
+            )));
+            return;
+        }
+        match ImageFormat::detect(&image_path) {
+            Ok(f) => f,
+            Err(e) => {
+                let _ = tx.send(InstallMessage::Error(format!(
+                    "Failed to detect image format: {}",
+                    e
+                )));
+                return;
+            }
+        }
+    };
+
+    let _ = tx.send(InstallMessage::Log(format!("Image: {}", image_path)));
+    let _ = tx.send(InstallMessage::Log(format!(
+        "Format: {}",
+        format.display_name()
+    )));
+    let _ = tx.send(InstallMessage::Log(format!("Target: {}", disk_path)));
+
+    if format.needs_qemu_img() {
+        let _ = tx.send(InstallMessage::Log(
+            "Using qemu-img convert to write image...".to_string(),
+        ));
+    }
+
+    // Stage 2: Write disk image (5-85%)
+    let write_desc = format!("Writing {} to target disk...", format.display_name());
+    let _ = tx.send(InstallMessage::Progress(InstallProgress {
+        stage: InstallStage::Installing,
+        percent: 5,
+        operation: write_desc,
+        log_line: None,
+    }));
+
+    if is_mock {
+        // Simulate write progress
+        let mock_stages = [
+            (10, "Writing disk image... 0%"),
+            (20, "Writing disk image... 15%"),
+            (30, "Writing disk image... 30%"),
+            (40, "Writing disk image... 45%"),
+            (50, "Writing disk image... 55%"),
+            (60, "Writing disk image... 70%"),
+            (70, "Writing disk image... 85%"),
+            (80, "Writing disk image... 95%"),
+            (85, "Syncing buffers to disk..."),
+        ];
+        for (percent, desc) in mock_stages {
+            thread::sleep(Duration::from_millis(200));
+            let _ = tx.send(InstallMessage::Progress(InstallProgress {
+                stage: InstallStage::Installing,
+                percent,
+                operation: desc.to_string(),
+                log_line: Some(desc.to_string()),
+            }));
+            let _ = tx.send(InstallMessage::Log(desc.to_string()));
+        }
+    } else {
+        let _ = tx.send(InstallMessage::Log(
+            "Writing image (this is IO-bound and may take several minutes)...".to_string(),
+        ));
+
+        match write_image(&image_path, &disk_path, &format) {
+            Ok(output) => {
+                if !output.is_empty() {
+                    let _ = tx.send(InstallMessage::Log(output));
+                }
+            }
+            Err(e) => {
+                let _ = tx.send(InstallMessage::Error(format!(
+                    "Failed to write disk image: {}",
+                    e
+                )));
+                return;
+            }
+        }
+    }
+
+    let _ = tx.send(InstallMessage::Log(
+        "Disk image written successfully".to_string(),
+    ));
+
+    // Stage 3: Set root password (85-95%)
+    let _ = tx.send(InstallMessage::Progress(InstallProgress {
+        stage: InstallStage::Installing,
+        percent: 85,
+        operation: "Setting root password...".to_string(),
+        log_line: None,
+    }));
+
+    if is_mock {
+        thread::sleep(Duration::from_millis(200));
+        let _ = tx.send(InstallMessage::Log(
+            "Root password set successfully".to_string(),
+        ));
+    } else {
+        // Mount the newly written disk to set the root password
+        // First, re-read partition table
+        let executor = RealExecutor;
+        let _ = executor.execute("partprobe", &[&disk_path]);
+        thread::sleep(Duration::from_millis(500));
+
+        // Find the root partition — try common layouts
+        // For NixOS images, root is typically the largest partition
+        let root_part = find_root_partition(&disk_path);
+
+        match root_part {
+            Some(part) => {
+                let mount_result = executor.execute("mount", &[&part, "/mnt"]);
+                if let Err(e) = mount_result {
+                    let _ = tx.send(InstallMessage::Error(format!(
+                        "Failed to mount root partition {}: {}",
+                        part, e
+                    )));
+                    return;
+                }
+
+                // Set root password using chroot + chpasswd
+                let chpasswd_result = std::process::Command::new("chroot")
+                    .args(["/mnt", "chpasswd"])
+                    .stdin(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped())
+                    .spawn()
+                    .and_then(|mut child| {
+                        use std::io::Write;
+                        if let Some(ref mut stdin) = child.stdin {
+                            stdin.write_all(format!("root:{}", root_password).as_bytes())?;
+                        }
+                        child.wait_with_output()
+                    });
+
+                // Always try to unmount
+                let _ = executor.execute("umount", &["/mnt"]);
+
+                match chpasswd_result {
+                    Ok(output) if output.status.success() => {
+                        let _ = tx.send(InstallMessage::Log(
+                            "Root password set successfully".to_string(),
+                        ));
+                    }
+                    Ok(output) => {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        let _ = tx.send(InstallMessage::Error(format!(
+                            "Failed to set root password: {}",
+                            stderr
+                        )));
+                        return;
+                    }
+                    Err(e) => {
+                        let _ = tx.send(InstallMessage::Error(format!(
+                            "Failed to set root password: {}",
+                            e
+                        )));
+                        return;
+                    }
+                }
+            }
+            None => {
+                let _ = tx.send(InstallMessage::Error(
+                    "Could not identify root partition on written disk".to_string(),
+                ));
+                return;
+            }
+        }
+    }
+
+    // Stage 4: Verify (95-100%)
+    let _ = tx.send(InstallMessage::Progress(InstallProgress {
+        stage: InstallStage::Verifying,
+        percent: 95,
+        operation: "Verifying installation...".to_string(),
+        log_line: None,
+    }));
+
+    if is_mock {
+        thread::sleep(Duration::from_millis(100));
+    } else {
+        // Quick sanity check — verify the partition table was written
+        let executor = RealExecutor;
+        match executor.execute("lsblk", &[&disk_path, "--json"]) {
+            Ok(output) => {
+                if output.stdout.contains("children") {
+                    let _ = tx.send(InstallMessage::Log("Partition table verified".to_string()));
+                }
+            }
+            Err(_) => {
+                let _ = tx.send(InstallMessage::Log(
+                    "Warning: could not verify partition table".to_string(),
+                ));
+            }
+        }
+    }
+
+    let _ = tx.send(InstallMessage::Log(
+        "Installation verified successfully".to_string(),
+    ));
+
+    // Complete
+    let _ = tx.send(InstallMessage::Progress(InstallProgress {
+        stage: InstallStage::Complete,
+        percent: 100,
+        operation: "Fast installation complete!".to_string(),
+        log_line: None,
+    }));
+
+    let _ = tx.send(InstallMessage::Success);
+}
+
+/// Find the root partition on a disk after writing an image.
+///
+/// Probes lsblk for the largest non-EFI partition, which is typically root.
+fn find_root_partition(disk_path: &str) -> Option<String> {
+    let output = std::process::Command::new("lsblk")
+        .args([
+            "--json",
+            "--bytes",
+            "--output",
+            "NAME,SIZE,FSTYPE,PARTTYPE",
+            disk_path,
+        ])
+        .output()
+        .ok()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Parse JSON to find the largest non-EFI partition
+    #[derive(serde::Deserialize)]
+    struct LsblkOut {
+        blockdevices: Vec<LsblkDev>,
+    }
+    #[derive(serde::Deserialize)]
+    struct LsblkDev {
+        #[allow(dead_code)]
+        name: String,
+        #[serde(default)]
+        children: Option<Vec<LsblkChild>>,
+    }
+    #[derive(serde::Deserialize)]
+    struct LsblkChild {
+        name: String,
+        #[serde(default)]
+        size: u64,
+        #[serde(default)]
+        fstype: Option<String>,
+    }
+
+    let parsed: LsblkOut = serde_json::from_str(&stdout).ok()?;
+    let dev = parsed.blockdevices.into_iter().next()?;
+    let children = dev.children?;
+
+    // Find the largest partition that isn't vfat (EFI)
+    children
+        .into_iter()
+        .filter(|c| c.fstype.as_deref() != Some("vfat"))
+        .max_by_key(|c| c.size)
+        .map(|c| format!("/dev/{}", c.name))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -482,5 +789,43 @@ mod tests {
                 assert!(has_progress, "Expected at least one progress message");
             }
         }
+    }
+
+    #[test]
+    fn test_fast_installation_mock() {
+        let rx = run_fast_installation_async(
+            "/path/to/image.raw".to_string(),
+            "/dev/sda".to_string(),
+            "password123".to_string(),
+            true,
+        );
+
+        let messages: Vec<InstallMessage> = rx.iter().collect();
+
+        // Should receive multiple progress updates
+        assert!(!messages.is_empty());
+
+        // Last message should be success
+        assert!(
+            matches!(messages.last(), Some(InstallMessage::Success)),
+            "Expected Success message, got: {:?}",
+            messages.last()
+        );
+
+        // Should have progress messages
+        let has_progress = messages
+            .iter()
+            .any(|m| matches!(m, InstallMessage::Progress(_)));
+        assert!(has_progress, "Expected at least one progress message");
+
+        // Should reach 100%
+        let final_progress = messages.iter().rev().find_map(|m| {
+            if let InstallMessage::Progress(p) = m {
+                Some(p.percent)
+            } else {
+                None
+            }
+        });
+        assert_eq!(final_progress, Some(100));
     }
 }

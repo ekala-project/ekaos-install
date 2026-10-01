@@ -9,7 +9,8 @@ use std::sync::mpsc::Receiver;
 
 use crate::config::InstallConfig;
 use crate::nixos::install::{
-    run_installation_async, InstallMessage, InstallProgress, InstallStage,
+    run_fast_installation_async, run_installation_async, InstallMessage, InstallProgress,
+    InstallStage,
 };
 use crate::ui::components::ProgressBar;
 use crate::ui::theme::{icons, spacing, AppTheme};
@@ -97,6 +98,27 @@ impl InstallationScreen {
         self.error_message = None;
         self.log_lines.clear();
         self.log_lines.push("Starting installation...".to_string());
+    }
+
+    /// Start the fast installation process (disk image write)
+    pub fn start_fast_installation(
+        &mut self,
+        image_path: String,
+        disk_path: String,
+        root_password: String,
+        is_mock: bool,
+    ) {
+        self.is_mock = is_mock;
+
+        let rx = run_fast_installation_async(image_path, disk_path, root_password, is_mock);
+        self.receiver = Some(rx);
+        self.is_running = true;
+        self.is_complete = false;
+        self.has_error = false;
+        self.error_message = None;
+        self.log_lines.clear();
+        self.log_lines
+            .push("Starting fast installation (disk image write)...".to_string());
     }
 
     /// Retry the installation after a failure

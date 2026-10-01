@@ -10,9 +10,9 @@ use tracing::info;
 use ekaos_install::{
     app::{App as InstallerApp, AppMode, Screen as AppScreen},
     ui::{
-        spacing, AppTheme, ConfigurationScreen, ConfirmationScreen, DiskSelectionScreen, Footer,
-        Header, InstallationScreen, NextScreen, PartitionPlanningScreen, PreviousScreen, Quit,
-        SuccessScreen, ToggleHelp, WelcomeScreen,
+        spacing, AppTheme, ConfigurationScreen, ConfirmationScreen, DiskSelectionScreen,
+        FastConfirmationScreen, Footer, Header, InstallationScreen, NextScreen,
+        PartitionPlanningScreen, PreviousScreen, Quit, SuccessScreen, ToggleHelp, WelcomeScreen,
     },
     APP_NAME, VERSION,
 };
@@ -36,6 +36,14 @@ struct Args {
     /// Load configuration from file
     #[arg(long, short, value_name = "FILE")]
     config: Option<String>,
+
+    /// Fast install mode: write a pre-built disk image instead of running nixos-install
+    #[arg(long, short)]
+    fast: bool,
+
+    /// Path to disk image file (required with --fast)
+    #[arg(long, value_name = "FILE", requires = "fast")]
+    image: Option<String>,
 }
 
 fn main() {
@@ -53,6 +61,15 @@ fn main() {
     };
 
     let dry_run = args.dry_run;
+    let fast = args.fast;
+    let image = args.image;
+
+    if fast {
+        info!("Fast install mode enabled");
+        if let Some(ref path) = image {
+            info!("Disk image: {}", path);
+        }
+    }
 
     Application::new().run(move |cx| {
         register_keybindings(cx);
@@ -63,7 +80,7 @@ fn main() {
                 show: true,
                 ..Default::default()
             },
-            |_window, cx| cx.new(|_cx| InstallerRoot::new(mode, dry_run)),
+            |_window, cx| cx.new(|_cx| InstallerRoot::new(mode, dry_run, fast, image.clone())),
         )
         .expect("Failed to open window");
     });
@@ -110,9 +127,7 @@ fn detect_display() {
     let has_wayland = env::var("WAYLAND_DISPLAY")
         .map(|v| !v.is_empty())
         .unwrap_or(false);
-    let has_x11 = env::var("DISPLAY")
-        .map(|v| !v.is_empty())
-        .unwrap_or(false);
+    let has_x11 = env::var("DISPLAY").map(|v| !v.is_empty()).unwrap_or(false);
 
     if has_wayland || has_x11 {
         return;
@@ -174,6 +189,7 @@ struct InstallerRoot {
     partition_planning: PartitionPlanningScreen,
     configuration: ConfigurationScreen,
     confirmation: ConfirmationScreen,
+    fast_confirmation: FastConfirmationScreen,
     installation: InstallationScreen,
     success: SuccessScreen,
     /// Help panel visibility
@@ -183,18 +199,25 @@ struct InstallerRoot {
 }
 
 impl InstallerRoot {
-    fn new(mode: AppMode, dry_run: bool) -> Self {
+    fn new(mode: AppMode, dry_run: bool, fast: bool, image: Option<String>) -> Self {
         let is_mock = mode == AppMode::Mock;
         let mut welcome = WelcomeScreen::new(is_mock, dry_run);
         welcome.run_checks();
 
+        let app = if fast {
+            InstallerApp::new_fast(mode, dry_run, image.clone().unwrap_or_default())
+        } else {
+            InstallerApp::new(mode, dry_run)
+        };
+
         Self {
-            app: InstallerApp::new(mode, dry_run),
+            app,
             welcome,
             disk_selection: DiskSelectionScreen::new(),
             partition_planning: PartitionPlanningScreen::new(),
             configuration: ConfigurationScreen::new(),
             confirmation: ConfirmationScreen::new(),
+            fast_confirmation: FastConfirmationScreen::new(image.unwrap_or_default()),
             installation: InstallationScreen::new(),
             success: SuccessScreen::new(),
             help_visible: false,
@@ -236,8 +259,30 @@ impl InstallerRoot {
                 let config = self.configuration.get_config().clone();
                 self.confirmation.set_config(config);
             }
+            AppScreen::FastConfirmation => {
+                if let Some(disk) = self.disk_selection.selected_disk() {
+                    self.fast_confirmation.set_disk(
+                        disk.path.clone(),
+                        disk.size,
+                        disk.display_name(),
+                    );
+                }
+            }
             AppScreen::Installation => {
-                if let Some(config) = self.confirmation.get_config() {
+                if self.app.is_fast() {
+                    if let (Some(disk), Some(image_path)) = (
+                        self.disk_selection.selected_disk(),
+                        self.app.image_path.clone(),
+                    ) {
+                        let root_password = self.fast_confirmation.root_password().to_string();
+                        self.installation.start_fast_installation(
+                            image_path,
+                            disk.path.clone(),
+                            root_password,
+                            self.app.is_mock(),
+                        );
+                    }
+                } else if let Some(config) = self.confirmation.get_config() {
                     self.installation.start_installation(
                         config.clone(),
                         "/mnt".to_string(),
@@ -264,6 +309,7 @@ impl InstallerRoot {
             AppScreen::PartitionPlanning => true,
             AppScreen::Configuration => self.configuration.can_proceed(),
             AppScreen::Confirmation => self.confirmation.can_proceed(),
+            AppScreen::FastConfirmation => self.fast_confirmation.can_proceed(),
             AppScreen::Installation => self.installation.can_proceed(),
             AppScreen::Complete => {
                 cx.quit();
@@ -314,6 +360,7 @@ impl InstallerRoot {
             AppScreen::PartitionPlanning => self.partition_planning.view().into_any_element(),
             AppScreen::Configuration => self.configuration.view().into_any_element(),
             AppScreen::Confirmation => self.confirmation.view().into_any_element(),
+            AppScreen::FastConfirmation => self.fast_confirmation.view().into_any_element(),
             AppScreen::Installation => {
                 self.installation.update();
                 self.installation.view().into_any_element()
@@ -347,6 +394,7 @@ impl Render for InstallerRoot {
             .child(Header::new(
                 self.app.current_screen,
                 self.app.current_screen.title(),
+                self.app.install_mode,
             ))
             // Main content area
             .child(
@@ -358,6 +406,10 @@ impl Render for InstallerRoot {
                     .child(screen_content),
             )
             // Footer
-            .child(Footer::new(self.app.current_screen, self.app.is_mock()))
+            .child(Footer::new(
+                self.app.current_screen,
+                self.app.is_mock(),
+                self.app.install_mode,
+            ))
     }
 }
