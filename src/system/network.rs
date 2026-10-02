@@ -161,11 +161,9 @@ mod tests {
     #[test]
     fn test_network_status_description() {
         assert!(NetworkStatus::Connected.description().contains("available"));
-        assert!(
-            NetworkStatus::Disconnected
-                .description()
-                .contains("No network")
-        );
+        assert!(NetworkStatus::Disconnected
+            .description()
+            .contains("No network"));
     }
 
     #[test]

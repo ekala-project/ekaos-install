@@ -297,7 +297,7 @@ impl<'a> SafeCommand<'a> {
     }
 
     /// Get the full command as a string (for display purposes)
-    pub fn to_string(&self) -> String {
+    pub fn display(&self) -> String {
         format!("{} {}", self.command, self.args.join(" "))
     }
 }
@@ -334,7 +334,7 @@ mod tests {
             .arg("arg1")
             .arg("arg2");
 
-        assert_eq!(cmd.to_string(), "test arg1 arg2");
+        assert_eq!(cmd.display(), "test arg1 arg2");
         assert_eq!(cmd.description(), "Test command");
     }
 

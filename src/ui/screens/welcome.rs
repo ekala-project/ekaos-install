@@ -1,40 +1,16 @@
 //! Welcome screen with pre-flight checks
+//!
+//! First screen in the installer wizard. Runs system checks and displays
+//! boot mode information before allowing the user to proceed.
 
-use crossterm::event::KeyCode;
-use ratatui::{
-    Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
-};
+use gpui::prelude::*;
+use gpui::{div, px, FontWeight, IntoElement, SharedString};
 use tracing::{debug, warn};
 
 use crate::nixos::disk::detect_disks;
-use crate::system::{BootMode, check_network, detect_boot_mode, is_nixos, is_root};
-use crate::ui::{
-    components::{Button, Component, Focusable},
-    icons,
-    theme::AppTheme,
-    utils::render_navigation_hints,
-};
-
-use super::{Screen, ScreenAction};
-
-/// Welcome screen state
-pub struct WelcomeScreen {
-    /// Application theme
-    theme: AppTheme,
-    /// Whether we're in mock mode
-    is_mock: bool,
-    /// Whether dry-run is enabled
-    is_dry_run: bool,
-    /// Pre-flight check results
-    checks: PreFlightChecks,
-    /// Detected boot mode (public - needed by later screens)
-    pub boot_mode: BootMode,
-    /// Continue button
-    continue_button: Button,
-}
+use crate::system::{check_network, detect_boot_mode, is_nixos, is_root, BootMode};
+use crate::ui::theme::{icons, spacing, AppTheme};
+use crate::ui::utils::NavigationHints;
 
 /// Pre-flight check results
 #[derive(Debug, Clone)]
@@ -52,7 +28,7 @@ struct PreFlightChecks {
 impl Default for PreFlightChecks {
     fn default() -> Self {
         Self {
-            root_access: true, // Will be checked properly later
+            root_access: true,
             network: true,
             nixos_iso: true,
             disk_space: true,
@@ -60,192 +36,32 @@ impl Default for PreFlightChecks {
     }
 }
 
+/// Welcome screen state
+pub struct WelcomeScreen {
+    /// Detected boot mode (public - needed by later screens)
+    pub boot_mode: BootMode,
+    /// Whether we're in mock mode
+    is_mock: bool,
+    /// Whether dry-run is enabled
+    is_dry_run: bool,
+    /// Pre-flight check results
+    checks: PreFlightChecks,
+}
+
+#[allow(dead_code)]
 impl WelcomeScreen {
     /// Create a new welcome screen
     pub fn new(is_mock: bool, is_dry_run: bool) -> Self {
-        let continue_button = Button::new("Continue");
-
         Self {
-            theme: AppTheme::new(),
+            boot_mode: BootMode::Unknown,
             is_mock,
             is_dry_run,
             checks: PreFlightChecks::default(),
-            boot_mode: BootMode::Unknown,
-            continue_button,
         }
     }
 
-    /// Check if all pre-flight checks passed
-    fn all_checks_passed(&self) -> bool {
-        self.checks.root_access
-            && self.checks.network
-            && self.checks.nixos_iso
-            && self.checks.disk_space
-    }
-}
-
-impl Screen for WelcomeScreen {
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        // Split into sections
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1),  // Spacer
-                Constraint::Length(3),  // Title
-                Constraint::Length(1),  // Spacer
-                Constraint::Length(2),  // Subtitle
-                Constraint::Length(2),  // Spacer/Mode indicators
-                Constraint::Length(10), // Pre-flight checks
-                Constraint::Length(5),  // Boot mode
-                Constraint::Length(3),  // Continue button
-                Constraint::Min(0),     // Spacer
-                Constraint::Length(3),  // Navigation hints
-            ])
-            .split(area);
-
-        // Title
-        let title = Paragraph::new(vec![Line::from(Span::styled(
-            "Welcome to Ekaos Install",
-            self.theme.title(),
-        ))])
-        .alignment(Alignment::Center);
-        frame.render_widget(title, chunks[1]);
-
-        // Subtitle
-        let subtitle = Paragraph::new("A guided installer for NixOS")
-            .alignment(Alignment::Center)
-            .style(self.theme.text());
-        frame.render_widget(subtitle, chunks[3]);
-
-        // Mode indicators
-        if self.is_mock || self.is_dry_run {
-            let mut mode_text = Vec::new();
-
-            if self.is_mock {
-                mode_text.push(Line::from(Span::styled(
-                    "Running in MOCK MODE",
-                    self.theme.warning_bold(),
-                )));
-                mode_text.push(Line::from(Span::styled(
-                    "(No actual system changes will be made)",
-                    self.theme.text_muted(),
-                )));
-            }
-
-            if self.is_dry_run {
-                mode_text.push(Line::from(Span::styled(
-                    "DRY-RUN MODE ENABLED",
-                    self.theme.info_bold(),
-                )));
-            }
-
-            let mode_para = Paragraph::new(mode_text).alignment(Alignment::Center);
-            frame.render_widget(mode_para, chunks[4]);
-        }
-
-        // Pre-flight checks
-        let checks_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Pre-Flight Checks ")
-            .border_style(self.theme.border_style());
-
-        let check_lines = vec![
-            self.check_line("Root Access", self.checks.root_access),
-            self.check_line("Network Connectivity", self.checks.network),
-            self.check_line("NixOS Installation Media", self.checks.nixos_iso),
-            self.check_line("Sufficient Disk Space", self.checks.disk_space),
-        ];
-
-        let checks_para = Paragraph::new(check_lines)
-            .block(checks_block)
-            .style(self.theme.text());
-        frame.render_widget(checks_para, chunks[5]);
-
-        // Boot mode section
-        let boot_mode_block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Boot Mode ")
-            .border_style(self.theme.border_style());
-
-        let boot_mode_lines = vec![
-            Line::from(vec![
-                Span::styled("Mode: ", self.theme.text_muted()),
-                Span::styled(self.boot_mode.as_str(), self.theme.info_bold()),
-            ]),
-            Line::from(Span::styled(
-                self.boot_mode.description(),
-                self.theme.text_muted(),
-            )),
-        ];
-
-        let boot_mode_para = Paragraph::new(boot_mode_lines)
-            .block(boot_mode_block)
-            .style(self.theme.text());
-        frame.render_widget(boot_mode_para, chunks[6]);
-
-        // Continue button
-        self.continue_button.render(frame, chunks[7]);
-
-        // Navigation hints
-        render_navigation_hints(
-            frame,
-            &[
-                ("Enter", "Submit from button"),
-                ("?", "Help"),
-                ("q", "Quit"),
-            ],
-            &self.theme,
-            chunks[9],
-        );
-
-        // Error message if checks failed (overlay on spacer area)
-        if !self.all_checks_passed() {
-            let error_msg = vec![
-                Line::from(""),
-                Line::from(Span::styled(
-                    "Please resolve the issues above before continuing",
-                    self.theme.error(),
-                )),
-            ];
-            let error_para = Paragraph::new(error_msg).alignment(Alignment::Center);
-            frame.render_widget(error_para, chunks[8]);
-        }
-    }
-
-    fn handle_input(&mut self, key: KeyCode) -> ScreenAction {
-        // Try standard handlers first (quit, help)
-        if let Some(action) = self.handle_standard_input(key) {
-            return action;
-        }
-
-        // Handle screen-specific keys
-        match key {
-            KeyCode::Enter => {
-                // Only advance when button is focused and checks pass
-                if self.continue_button.is_focused() && self.all_checks_passed() {
-                    ScreenAction::Next
-                } else {
-                    ScreenAction::None
-                }
-            }
-            _ => ScreenAction::None,
-        }
-    }
-
-    fn title(&self) -> &str {
-        "Welcome"
-    }
-
-    fn can_proceed(&self) -> bool {
-        self.all_checks_passed()
-    }
-
-    fn can_go_back(&self) -> bool {
-        false // Can't go back from welcome screen
-    }
-
-    fn on_enter(&mut self) {
-        // Perform pre-flight checks
+    /// Run pre-flight checks (called by the root view when entering this screen)
+    pub fn run_checks(&mut self) {
         debug!("Running pre-flight checks");
 
         // Check 1: Root access (or mock mode)
@@ -315,12 +131,23 @@ impl Screen for WelcomeScreen {
                 self.boot_mode = BootMode::Unknown;
             }
         }
-
-        // Set button as focused
-        self.continue_button.set_focused(true);
     }
 
-    fn help_content(&self) -> Vec<String> {
+    /// Check if all pre-flight checks passed
+    pub fn all_checks_passed(&self) -> bool {
+        self.checks.root_access
+            && self.checks.network
+            && self.checks.nixos_iso
+            && self.checks.disk_space
+    }
+
+    /// Check if this screen can proceed to the next screen
+    pub fn can_proceed(&self) -> bool {
+        self.all_checks_passed()
+    }
+
+    /// Get help content lines for the help panel
+    pub fn help_content(&self) -> Vec<String> {
         vec![
             "# Welcome Screen".to_string(),
             "".to_string(),
@@ -349,32 +176,218 @@ impl Screen for WelcomeScreen {
             "- Enter: Press Continue button (when checks pass)".to_string(),
             "- ?: Toggle this help panel".to_string(),
             "- q/Esc: Quit the installer".to_string(),
-            "".to_string(),
-            "# How to Continue".to_string(),
-            "".to_string(),
-            "Once all pre-flight checks pass, the Continue button will be enabled".to_string(),
-            "Press Enter to proceed to disk selection.".to_string(),
         ]
     }
-}
 
-impl WelcomeScreen {
-    /// Create a check status line
-    fn check_line(&self, label: &str, passed: bool) -> Line<'static> {
-        let icon = if passed { icons::SUCCESS } else { icons::ERROR };
-
-        let style = if passed {
-            self.theme.success()
+    /// Build a check status element for one pre-flight check line
+    fn check_element(&self, label: &str, passed: bool, theme: &AppTheme) -> impl IntoElement {
+        let icon: SharedString = if passed {
+            icons::SUCCESS.into()
         } else {
-            self.theme.error()
+            icons::ERROR.into()
         };
+        let icon_color = if passed { theme.success } else { theme.error };
+        let label: SharedString = label.to_string().into();
 
-        Line::from(vec![
-            Span::raw("  "),
-            Span::styled(icon.to_string(), style),
-            Span::raw(" "),
-            Span::styled(label.to_string(), self.theme.text()),
-        ])
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(spacing::SMALL))
+            .pl(px(spacing::MEDIUM))
+            .py(px(2.0))
+            .child(
+                div()
+                    .text_color(icon_color)
+                    .font_weight(FontWeight::BOLD)
+                    .child(icon),
+            )
+            .child(div().text_color(theme.foreground).child(label))
+    }
+
+    /// Render this screen as a gpui element tree.
+    pub fn view(&mut self) -> impl IntoElement {
+        let theme = AppTheme::new();
+
+        let mut col = div()
+            .flex()
+            .flex_col()
+            .size_full()
+            .gap(px(spacing::MEDIUM))
+            .p(px(spacing::LARGE));
+
+        // Title
+        col = col.child(
+            div()
+                .w_full()
+                .flex()
+                .justify_center()
+                .pt(px(spacing::LARGE))
+                .child(
+                    div()
+                        .text_color(theme.primary)
+                        .font_weight(FontWeight::BOLD)
+                        .text_xl()
+                        .child("Welcome to Ekaos Install"),
+                ),
+        );
+
+        // Subtitle
+        col = col.child(
+            div().w_full().flex().justify_center().child(
+                div()
+                    .text_color(theme.foreground)
+                    .text_sm()
+                    .child("A guided installer for NixOS"),
+            ),
+        );
+
+        // Mode indicators
+        if self.is_mock || self.is_dry_run {
+            let mut mode_col = div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .items_center()
+                .gap(px(spacing::SMALL));
+
+            if self.is_mock {
+                mode_col = mode_col.child(
+                    div()
+                        .text_color(theme.warning)
+                        .font_weight(FontWeight::BOLD)
+                        .child("Running in MOCK MODE"),
+                );
+                mode_col = mode_col.child(
+                    div()
+                        .text_color(theme.muted)
+                        .text_sm()
+                        .child("(No actual system changes will be made)"),
+                );
+            }
+
+            if self.is_dry_run {
+                mode_col = mode_col.child(
+                    div()
+                        .text_color(theme.info)
+                        .font_weight(FontWeight::BOLD)
+                        .child("DRY-RUN MODE ENABLED"),
+                );
+            }
+
+            col = col.child(mode_col);
+        }
+
+        // Pre-flight checks block
+        let checks_title: SharedString = " Pre-Flight Checks ".into();
+        let mut checks_block = div()
+            .w_full()
+            .border_1()
+            .border_color(theme.border)
+            .rounded(px(4.0))
+            .flex()
+            .flex_col()
+            .overflow_hidden()
+            .child(
+                div()
+                    .w_full()
+                    .px(px(spacing::MEDIUM))
+                    .py(px(spacing::SMALL))
+                    .border_b_1()
+                    .border_color(theme.border)
+                    .text_color(theme.foreground)
+                    .font_weight(FontWeight::BOLD)
+                    .text_sm()
+                    .child(checks_title),
+            );
+
+        checks_block = checks_block.child(
+            div()
+                .py(px(spacing::SMALL))
+                .child(self.check_element("Root Access", self.checks.root_access, &theme))
+                .child(self.check_element("Network Connectivity", self.checks.network, &theme))
+                .child(self.check_element(
+                    "NixOS Installation Media",
+                    self.checks.nixos_iso,
+                    &theme,
+                ))
+                .child(self.check_element("Sufficient Disk Space", self.checks.disk_space, &theme)),
+        );
+
+        col = col.child(checks_block);
+
+        // Boot mode block
+        let boot_title: SharedString = " Boot Mode ".into();
+        let mode_label: SharedString = self.boot_mode.as_str().into();
+        let mode_desc: SharedString = self.boot_mode.description().into();
+
+        col = col.child(
+            div()
+                .w_full()
+                .border_1()
+                .border_color(theme.border)
+                .rounded(px(4.0))
+                .flex()
+                .flex_col()
+                .overflow_hidden()
+                .child(
+                    div()
+                        .w_full()
+                        .px(px(spacing::MEDIUM))
+                        .py(px(spacing::SMALL))
+                        .border_b_1()
+                        .border_color(theme.border)
+                        .text_color(theme.foreground)
+                        .font_weight(FontWeight::BOLD)
+                        .text_sm()
+                        .child(boot_title),
+                )
+                .child(
+                    div()
+                        .px(px(spacing::MEDIUM))
+                        .py(px(spacing::SMALL))
+                        .flex()
+                        .flex_col()
+                        .gap(px(spacing::SMALL))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .gap(px(spacing::SMALL))
+                                .child(div().text_color(theme.muted).child("Mode:"))
+                                .child(
+                                    div()
+                                        .text_color(theme.info)
+                                        .font_weight(FontWeight::BOLD)
+                                        .child(mode_label),
+                                ),
+                        )
+                        .child(div().text_color(theme.muted).text_sm().child(mode_desc)),
+                ),
+        );
+
+        // Error message if checks failed
+        if !self.all_checks_passed() {
+            col = col.child(
+                div().w_full().flex().justify_center().child(
+                    div()
+                        .text_color(theme.error)
+                        .child("Please resolve the issues above before continuing"),
+                ),
+            );
+        }
+
+        // Spacer
+        col = col.child(div().flex_1());
+
+        // Navigation hints
+        col = col.child(NavigationHints::new(vec![
+            ("Enter", "Continue"),
+            ("?", "Help"),
+            ("q", "Quit"),
+        ]));
+
+        col
     }
 }
 
@@ -385,36 +398,64 @@ mod tests {
     #[test]
     fn test_welcome_screen_creation() {
         let screen = WelcomeScreen::new(true, false);
-        assert_eq!(screen.title(), "Welcome");
         assert!(screen.is_mock);
         assert!(!screen.is_dry_run);
+        assert_eq!(screen.boot_mode, BootMode::Unknown);
     }
 
     #[test]
-    fn test_preflight_checks() {
-        std::env::set_var("EKAOS_MOCK", "1");
-        let mut screen = WelcomeScreen::new(true, false);
-        screen.on_enter();
+    fn test_welcome_screen_dry_run() {
+        let screen = WelcomeScreen::new(false, true);
+        assert!(!screen.is_mock);
+        assert!(screen.is_dry_run);
+    }
+
+    #[test]
+    fn test_preflight_checks_default_pass() {
+        let screen = WelcomeScreen::new(false, false);
+        // Default checks are all true
         assert!(screen.all_checks_passed());
         assert!(screen.can_proceed());
+    }
+
+    #[test]
+    fn test_preflight_checks_mock_mode() {
+        std::env::set_var("EKAOS_MOCK", "1");
+        let mut screen = WelcomeScreen::new(true, false);
+        screen.run_checks();
+        assert!(screen.all_checks_passed());
+        assert!(screen.can_proceed());
+        assert_eq!(screen.boot_mode, BootMode::Uefi);
         std::env::remove_var("EKAOS_MOCK");
     }
 
     #[test]
-    fn test_navigation() {
-        std::env::set_var("EKAOS_MOCK", "1");
-        let mut screen = WelcomeScreen::new(true, false);
-        screen.on_enter(); // Sets up button focus and runs checks in mock mode
+    fn test_preflight_checks_failure() {
+        let mut screen = WelcomeScreen::new(false, false);
+        screen.checks.root_access = false;
+        assert!(!screen.all_checks_passed());
+        assert!(!screen.can_proceed());
+    }
 
-        // Can't go back from welcome
-        assert!(!screen.can_go_back());
+    #[test]
+    fn test_preflight_checks_network_failure() {
+        let mut screen = WelcomeScreen::new(false, false);
+        screen.checks.network = false;
+        assert!(!screen.all_checks_passed());
+    }
 
-        // Enter should proceed when checks pass and button is focused
-        assert_eq!(screen.handle_input(KeyCode::Enter), ScreenAction::Next);
+    #[test]
+    fn test_preflight_checks_nixos_failure() {
+        let mut screen = WelcomeScreen::new(false, false);
+        screen.checks.nixos_iso = false;
+        assert!(!screen.all_checks_passed());
+    }
 
-        // q should exit
-        assert_eq!(screen.handle_input(KeyCode::Char('q')), ScreenAction::Exit);
-        std::env::remove_var("EKAOS_MOCK");
+    #[test]
+    fn test_preflight_checks_disk_failure() {
+        let mut screen = WelcomeScreen::new(false, false);
+        screen.checks.disk_space = false;
+        assert!(!screen.all_checks_passed());
     }
 
     #[test]
@@ -423,5 +464,23 @@ mod tests {
         let help = screen.help_content();
         assert!(!help.is_empty());
         assert!(help[0].contains("Welcome Screen"));
+    }
+
+    #[test]
+    fn test_help_content_covers_boot_modes() {
+        let screen = WelcomeScreen::new(false, false);
+        let help = screen.help_content();
+        let joined = help.join("\n");
+        assert!(joined.contains("UEFI"));
+        assert!(joined.contains("Legacy BIOS"));
+    }
+
+    #[test]
+    fn test_help_content_covers_shortcuts() {
+        let screen = WelcomeScreen::new(false, false);
+        let help = screen.help_content();
+        let joined = help.join("\n");
+        assert!(joined.contains("Enter"));
+        assert!(joined.contains("Quit"));
     }
 }

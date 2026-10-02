@@ -14,19 +14,29 @@ pkgs.mkShell {
     pkg-config
     openssl
     gcc
+    cmake
+
+    # GPU/Wayland/X11 dependencies (for gpui)
+    vulkan-loader
+    wayland
+    libxkbcommon
+    fontconfig
+    freetype
+    xorg.libX11
+    xorg.libXcursor
+    xorg.libXrandr
+    xorg.libXi
+    xorg.libxcb
 
     # Development tools
     cargo-watch
 
     # VM testing
     qemu
-
-    # Terminal support
-    ncurses
   ];
 
   shellHook = ''
-    echo "🚀 Ekaos Install Development Environment"
+    echo "Ekaos Install Development Environment"
     echo ""
     echo "Rust version: $(rustc --version)"
     echo "Cargo version: $(cargo --version)"

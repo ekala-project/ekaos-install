@@ -1,16 +1,11 @@
 //! Status message component
 //!
-//! Displays success, warning, error, or info messages
+//! Stateless `RenderOnce` widget for displaying success, warning, error, or info messages.
 
-use ratatui::{
-    Frame,
-    layout::Rect,
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
-};
+use gpui::prelude::*;
+use gpui::{div, px, FontWeight, Hsla, IntoElement, SharedString};
 
-use super::Component;
+use crate::ui::theme::{icons, spacing, AppTheme};
 
 /// Message type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,40 +21,42 @@ pub enum MessageType {
 }
 
 impl MessageType {
-    /// Get the color for this message type
-    pub fn color(&self) -> Color {
+    /// Get the color for this message type from the theme.
+    pub fn color(&self) -> Hsla {
+        let theme = AppTheme::new();
         match self {
-            MessageType::Success => Color::Green,
-            MessageType::Warning => Color::Yellow,
-            MessageType::Error => Color::Red,
-            MessageType::Info => Color::Blue,
+            MessageType::Success => theme.success,
+            MessageType::Warning => theme.warning,
+            MessageType::Error => theme.error,
+            MessageType::Info => theme.info,
         }
     }
 
-    /// Get the icon for this message type
+    /// Get the icon for this message type.
     pub fn icon(&self) -> &'static str {
         match self {
-            MessageType::Success => "✓",
-            MessageType::Warning => "⚠",
-            MessageType::Error => "✗",
-            MessageType::Info => "ℹ",
+            MessageType::Success => icons::SUCCESS,
+            MessageType::Warning => icons::WARNING,
+            MessageType::Error => icons::ERROR,
+            MessageType::Info => icons::INFO,
         }
     }
 }
 
 /// Status message component
+#[derive(IntoElement)]
 pub struct StatusMessage {
     /// Message text
-    text: String,
+    text: SharedString,
     /// Message type
     message_type: MessageType,
-    /// Whether to show border
+    /// Whether to show a border
     show_border: bool,
 }
 
 impl StatusMessage {
-    /// Create a new status message
-    pub fn new(message_type: MessageType, text: impl Into<String>) -> Self {
+    /// Create a new status message.
+    pub fn new(message_type: MessageType, text: impl Into<SharedString>) -> Self {
         Self {
             text: text.into(),
             message_type,
@@ -67,56 +64,118 @@ impl StatusMessage {
         }
     }
 
-    /// Show border around message
+    /// Show a border around the message.
     pub fn with_border(mut self) -> Self {
         self.show_border = true;
         self
     }
 
-    /// Create a success message
-    pub fn success(text: impl Into<String>) -> Self {
+    /// Create a success message.
+    pub fn success(text: impl Into<SharedString>) -> Self {
         Self::new(MessageType::Success, text)
     }
 
-    /// Create a warning message
-    pub fn warning(text: impl Into<String>) -> Self {
+    /// Create a warning message.
+    pub fn warning(text: impl Into<SharedString>) -> Self {
         Self::new(MessageType::Warning, text)
     }
 
-    /// Create an error message
-    pub fn error(text: impl Into<String>) -> Self {
+    /// Create an error message.
+    pub fn error(text: impl Into<SharedString>) -> Self {
         Self::new(MessageType::Error, text)
     }
 
-    /// Create an info message
-    pub fn info(text: impl Into<String>) -> Self {
+    /// Create an info message.
+    pub fn info(text: impl Into<SharedString>) -> Self {
         Self::new(MessageType::Info, text)
     }
 }
 
-impl Component for StatusMessage {
-    fn render(&mut self, frame: &mut Frame<'_>, area: Rect) {
+impl RenderOnce for StatusMessage {
+    fn render(self, _window: &mut gpui::Window, _cx: &mut gpui::App) -> impl IntoElement {
         let color = self.message_type.color();
-        let icon = self.message_type.icon();
+        let icon: SharedString = format!("{} ", self.message_type.icon()).into();
 
-        let line = Line::from(vec![
-            Span::styled(
-                format!("{} ", icon),
-                Style::default().fg(color).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(self.text.clone(), Style::default().fg(color)),
-        ]);
-
-        let paragraph = if self.show_border {
-            Paragraph::new(line).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(color)),
+        let mut row = div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(spacing::SMALL))
+            .child(
+                div()
+                    .text_color(color)
+                    .font_weight(FontWeight::BOLD)
+                    .child(icon),
             )
-        } else {
-            Paragraph::new(line)
-        };
+            .child(div().text_color(color).child(self.text));
 
-        frame.render_widget(paragraph, area);
+        if self.show_border {
+            row = row
+                .border_1()
+                .border_color(color)
+                .rounded(px(4.0))
+                .p(px(spacing::MEDIUM));
+        }
+
+        row
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_message_type_colors() {
+        let theme = AppTheme::new();
+
+        let success_color = MessageType::Success.color();
+        assert!((success_color.h - theme.success.h).abs() < f32::EPSILON);
+
+        let error_color = MessageType::Error.color();
+        assert!((error_color.h - theme.error.h).abs() < f32::EPSILON);
+
+        let warning_color = MessageType::Warning.color();
+        assert!((warning_color.h - theme.warning.h).abs() < f32::EPSILON);
+
+        let info_color = MessageType::Info.color();
+        assert!((info_color.h - theme.info.h).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_message_type_icons() {
+        assert_eq!(MessageType::Success.icon(), icons::SUCCESS);
+        assert_eq!(MessageType::Error.icon(), icons::ERROR);
+        assert_eq!(MessageType::Warning.icon(), icons::WARNING);
+        assert_eq!(MessageType::Info.icon(), icons::INFO);
+    }
+
+    #[test]
+    fn test_status_message_creation() {
+        let msg = StatusMessage::new(MessageType::Success, "All good");
+        assert_eq!(msg.text.as_ref(), "All good");
+        assert_eq!(msg.message_type, MessageType::Success);
+        assert!(!msg.show_border);
+    }
+
+    #[test]
+    fn test_status_message_convenience() {
+        let s = StatusMessage::success("ok");
+        assert_eq!(s.message_type, MessageType::Success);
+
+        let w = StatusMessage::warning("watch out");
+        assert_eq!(w.message_type, MessageType::Warning);
+
+        let e = StatusMessage::error("bad");
+        assert_eq!(e.message_type, MessageType::Error);
+
+        let i = StatusMessage::info("fyi");
+        assert_eq!(i.message_type, MessageType::Info);
+    }
+
+    #[test]
+    fn test_status_message_with_border() {
+        let msg = StatusMessage::info("bordered").with_border();
+        assert!(msg.show_border);
     }
 }
