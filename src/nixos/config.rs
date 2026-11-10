@@ -56,7 +56,7 @@ pub fn generate_configuration(config: &InstallConfig) -> Result<String, Installe
             );
         },
     }
-    nix_config.push_str("\n");
+    nix_config.push('\n');
 
     // LUKS encryption configuration
     if config.luks_encryption {
@@ -97,7 +97,7 @@ pub fn generate_configuration(config: &InstallConfig) -> Result<String, Installe
             "  # networking.networkmanager.enable = true; # Uncomment to enable NetworkManager\n",
         );
     }
-    nix_config.push_str("\n");
+    nix_config.push('\n');
 
     // Locale and timezone
     nix_config.push_str("  # Set your time zone\n");
@@ -105,7 +105,7 @@ pub fn generate_configuration(config: &InstallConfig) -> Result<String, Installe
 
     nix_config.push_str("  # Select internationalization properties\n");
     nix_config.push_str(&format!("  i18n.defaultLocale = \"{}\";\n", config.locale));
-    nix_config.push_str("\n");
+    nix_config.push('\n');
 
     // Console configuration
     nix_config.push_str("  # Console keymap\n");

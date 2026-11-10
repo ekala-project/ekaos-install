@@ -278,6 +278,6 @@ mod tests {
         assert_eq!(icons::SUCCESS, "✓");
         assert_eq!(icons::ERROR, "✗");
         assert_eq!(icons::WARNING, "⚠");
-        assert!(icons::SPINNER.len() > 0);
+        assert!(!icons::SPINNER.is_empty());
     }
 }
