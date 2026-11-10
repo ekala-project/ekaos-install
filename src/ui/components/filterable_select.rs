@@ -3,13 +3,11 @@
 //! Provides a searchable list component where users can type to filter
 //! items and select from the filtered results.
 
-use ratatui::{
-    Frame,
-    layout::Rect,
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
-};
+use ratatui::Frame;
+use ratatui::layout::Rect;
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 
 use super::{Component, Focusable, InputEvent, Interactive};
 
@@ -213,23 +211,23 @@ where
             InputEvent::Char(c) => {
                 self.add_char_to_query(c);
                 true
-            }
+            },
             InputEvent::Backspace => {
                 self.remove_char_from_query();
                 true
-            }
+            },
             InputEvent::Up => {
                 self.select_previous();
                 true
-            }
+            },
             InputEvent::Down => {
                 self.select_next();
                 true
-            }
+            },
             InputEvent::Escape => {
                 self.clear_query();
                 true
-            }
+            },
             _ => false,
         }
     }

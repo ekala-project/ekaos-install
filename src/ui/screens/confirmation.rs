@@ -4,21 +4,16 @@
 //! user confirmation before proceeding to the installation phase.
 
 use crossterm::event::KeyCode;
-use ratatui::{
-    Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
-};
-
-use crate::config::InstallConfig;
-use crate::ui::{
-    components::{Component, Focusable, InputField, Interactive},
-    theme::AppTheme,
-    utils::{keycode_to_input_event, render_navigation_hints},
-};
+use ratatui::Frame;
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Paragraph};
 
 use super::{Screen, ScreenAction};
+use crate::config::InstallConfig;
+use crate::ui::components::{Component, Focusable, InputField, Interactive};
+use crate::ui::theme::AppTheme;
+use crate::ui::utils::{keycode_to_input_event, render_navigation_hints};
 
 /// Confirmation screen state
 pub struct ConfirmationScreen {
@@ -251,7 +246,7 @@ impl Screen for ConfirmationScreen {
                 } else {
                     ScreenAction::None
                 }
-            }
+            },
             _ => {
                 // Pass input to confirmation field
                 if let Some(event) = keycode_to_input_event(key) {
@@ -259,7 +254,7 @@ impl Screen for ConfirmationScreen {
                     self.check_confirmation();
                 }
                 ScreenAction::None
-            }
+            },
         }
     }
 

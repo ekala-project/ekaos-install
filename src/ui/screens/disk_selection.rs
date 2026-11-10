@@ -3,18 +3,16 @@
 //! Allows the user to select which disk to install NixOS on.
 
 use crossterm::event::KeyCode;
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Layout, Rect},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
-};
+use ratatui::Frame;
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 use tracing::{debug, warn};
 
-use crate::nixos::{Disk, detect_disks};
-use crate::ui::{theme::AppTheme, utils::render_navigation_hints};
-
 use super::{Screen, ScreenAction};
+use crate::nixos::{Disk, detect_disks};
+use crate::ui::theme::AppTheme;
+use crate::ui::utils::render_navigation_hints;
 
 /// Disk selection screen state
 pub struct DiskSelectionScreen {
@@ -118,7 +116,10 @@ impl Screen for DiskSelectionScreen {
         // Instructions
         let instructions = Paragraph::new(vec![
             Line::from(""),
-            Line::from("Select a disk for NixOS installation. All data on the selected disk will be erased."),
+            Line::from(
+                "Select a disk for NixOS installation. All data on the selected disk will be \
+                 erased.",
+            ),
         ])
         .style(self.theme.text())
         .alignment(ratatui::layout::Alignment::Center);
@@ -305,11 +306,11 @@ impl Screen for DiskSelectionScreen {
             KeyCode::Up => {
                 self.select_previous();
                 ScreenAction::None
-            }
+            },
             KeyCode::Down => {
                 self.select_next();
                 ScreenAction::None
-            }
+            },
             KeyCode::Enter if self.is_selection_installable() => ScreenAction::Next,
             _ => ScreenAction::None,
         }
@@ -331,12 +332,12 @@ impl Screen for DiskSelectionScreen {
                     self.selected_index = 0;
                     self.detected = true;
                     self.error_message = None;
-                }
+                },
                 Err(e) => {
                     warn!("Failed to detect disks: {}", e);
                     self.error_message = Some(format!("Failed to detect disks: {}", e));
                     self.disks = Vec::new();
-                }
+                },
             }
         }
     }

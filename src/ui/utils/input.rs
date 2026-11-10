@@ -1,7 +1,8 @@
 //! Input conversion utilities
 
-use crate::ui::components::InputEvent;
 use crossterm::event::KeyCode;
+
+use crate::ui::components::InputEvent;
 
 /// Convert a KeyCode to an InputEvent
 ///

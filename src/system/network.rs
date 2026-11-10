@@ -2,10 +2,12 @@
 //!
 //! Checks for network connectivity to verify installation requirements.
 
-use crate::error::Result;
 use std::process::Command;
 use std::time::Duration;
+
 use tracing::debug;
+
+use crate::error::Result;
 
 /// Network connectivity status
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

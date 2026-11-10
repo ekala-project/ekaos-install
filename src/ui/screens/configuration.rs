@@ -3,27 +3,24 @@
 //! Collects basic system configuration: hostname, username, password, timezone.
 
 use crossterm::event::KeyCode;
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
-};
+use ratatui::Frame;
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Paragraph};
 use tracing::debug;
 
+use super::{Screen, ScreenAction};
 use crate::config::{BootLoader, InstallConfig};
 use crate::data::keymaps::get_keymap_list;
 use crate::data::locales::get_locale_list;
 use crate::data::timezones::{detect_timezone, get_timezone_list};
 use crate::system::BootMode;
-use crate::ui::{
-    components::{Button, Component, FilterableSelectList, Focusable, InputField, Interactive},
-    theme::AppTheme,
-    utils::{keycode_to_input_event, render_navigation_hints},
+use crate::ui::components::{
+    Button, Component, FilterableSelectList, Focusable, InputField, Interactive,
 };
-
-use super::{Screen, ScreenAction};
+use crate::ui::theme::AppTheme;
+use crate::ui::utils::{keycode_to_input_event, render_navigation_hints};
 
 /// Evaluate password strength and return a label and color
 fn password_strength(password: &str) -> (&'static str, Color) {
@@ -370,21 +367,21 @@ impl Screen for ConfigurationScreen {
             KeyCode::Tab => {
                 self.focus_next();
                 ScreenAction::None
-            }
+            },
             KeyCode::BackTab => {
                 self.focus_previous();
                 ScreenAction::None
-            }
+            },
             KeyCode::Left => {
                 // Left arrow always goes to previous field
                 self.focus_previous();
                 ScreenAction::None
-            }
+            },
             KeyCode::Right => {
                 // Right arrow always goes to next field
                 self.focus_next();
                 ScreenAction::None
-            }
+            },
             KeyCode::Down
                 if !self.timezone_selector.is_focused()
                     && !self.keymap_selector.is_focused()
@@ -393,7 +390,7 @@ impl Screen for ConfigurationScreen {
                 // Only use Down for navigation if not in a selector
                 self.focus_next();
                 ScreenAction::None
-            }
+            },
             KeyCode::Up
                 if !self.timezone_selector.is_focused()
                     && !self.keymap_selector.is_focused()
@@ -402,7 +399,7 @@ impl Screen for ConfigurationScreen {
                 // Only use Up for navigation if not in a selector
                 self.focus_previous();
                 ScreenAction::None
-            }
+            },
             KeyCode::Enter => {
                 // Enter behavior depends on which field is focused
                 match self.focused_field {
@@ -414,49 +411,49 @@ impl Screen for ConfigurationScreen {
                         } else {
                             ScreenAction::None
                         }
-                    }
+                    },
                     _ => {
                         // For all other fields, Enter moves to next field
                         self.focus_next();
                         ScreenAction::None
-                    }
+                    },
                 }
-            }
+            },
             _ => {
                 // Convert KeyCode to InputEvent and pass to focused field
                 if let Some(event) = keycode_to_input_event(key) {
                     match self.focused_field {
                         FocusedField::Hostname => {
                             self.hostname_input.handle_input(event);
-                        }
+                        },
                         FocusedField::Username => {
                             self.username_input.handle_input(event);
-                        }
+                        },
                         FocusedField::Password => {
                             self.password_input.handle_input(event);
-                        }
+                        },
                         FocusedField::PasswordConfirm => {
                             self.password_confirm_input.handle_input(event);
-                        }
+                        },
                         FocusedField::Timezone => {
                             self.timezone_selector.handle_input(event);
                             self.update_config();
-                        }
+                        },
                         FocusedField::Keymap => {
                             self.keymap_selector.handle_input(event);
                             self.update_config();
-                        }
+                        },
                         FocusedField::Locale => {
                             self.locale_selector.handle_input(event);
                             self.update_config();
-                        }
+                        },
                         FocusedField::ContinueButton => {
                             // Button doesn't need other input handling
-                        }
+                        },
                     }
                 }
                 ScreenAction::None
-            }
+            },
         }
     }
 

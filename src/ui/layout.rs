@@ -5,13 +5,11 @@
 //! - Content: Main interactive area
 //! - Footer: Navigation hints and help information
 
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Rect},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Gauge, Paragraph},
-};
+use ratatui::Frame;
+use ratatui::layout::{Constraint, Direction, Rect};
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Gauge, Paragraph};
 
 use crate::app::Screen;
 

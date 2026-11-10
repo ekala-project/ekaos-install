@@ -2,13 +2,11 @@
 //!
 //! Single-select list with keyboard navigation
 
-use ratatui::{
-    Frame,
-    layout::Rect,
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem},
-};
+use ratatui::Frame;
+use ratatui::layout::Rect;
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, List, ListItem};
 
 use super::{Component, Focusable, InputEvent, Interactive};
 
@@ -166,11 +164,11 @@ impl<T> Interactive for SelectList<T> {
             InputEvent::Up => {
                 self.move_up();
                 true
-            }
+            },
             InputEvent::Down => {
                 self.move_down();
                 true
-            }
+            },
             InputEvent::Enter => true,
             _ => false,
         }

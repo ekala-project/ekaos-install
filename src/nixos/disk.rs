@@ -2,11 +2,13 @@
 //!
 //! Detects available disks using lsblk and parses disk information.
 
-use crate::error::Result;
+use std::process::Command;
+
 use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
-use std::process::Command;
 use tracing::debug;
+
+use crate::error::Result;
 
 /// Disk type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

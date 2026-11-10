@@ -1,12 +1,10 @@
 //! Progress indicator components
 
-use ratatui::{
-    Frame,
-    layout::Rect,
-    style::{Color, Modifier, Style},
-    text::Span,
-    widgets::{Block, Borders, Gauge},
-};
+use ratatui::Frame;
+use ratatui::layout::Rect;
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::Span;
+use ratatui::widgets::{Block, Borders, Gauge};
 
 use super::Component;
 

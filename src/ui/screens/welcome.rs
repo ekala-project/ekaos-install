@@ -1,24 +1,19 @@
 //! Welcome screen with pre-flight checks
 
 use crossterm::event::KeyCode;
-use ratatui::{
-    Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
-};
+use ratatui::Frame;
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Paragraph};
 use tracing::{debug, warn};
 
+use super::{Screen, ScreenAction};
 use crate::nixos::disk::detect_disks;
 use crate::system::{BootMode, check_network, detect_boot_mode, is_nixos, is_root};
-use crate::ui::{
-    components::{Button, Component, Focusable},
-    icons,
-    theme::AppTheme,
-    utils::render_navigation_hints,
-};
-
-use super::{Screen, ScreenAction};
+use crate::ui::components::{Button, Component, Focusable};
+use crate::ui::icons;
+use crate::ui::theme::AppTheme;
+use crate::ui::utils::render_navigation_hints;
 
 /// Welcome screen state
 pub struct WelcomeScreen {
@@ -227,7 +222,7 @@ impl Screen for WelcomeScreen {
                 } else {
                     ScreenAction::None
                 }
-            }
+            },
             _ => ScreenAction::None,
         }
     }
@@ -260,11 +255,11 @@ impl Screen for WelcomeScreen {
                     "Network check: {} (status: {:?})",
                     self.checks.network, status
                 );
-            }
+            },
             Err(e) => {
                 warn!("Network check failed: {}", e);
                 self.checks.network = false;
-            }
+            },
         }
 
         // Check 3: Running on NixOS
@@ -272,11 +267,11 @@ impl Screen for WelcomeScreen {
             Ok(result) => {
                 self.checks.nixos_iso = result;
                 debug!("NixOS check: {}", self.checks.nixos_iso);
-            }
+            },
             Err(e) => {
                 warn!("NixOS check failed: {}", e);
                 self.checks.nixos_iso = false;
-            }
+            },
         }
 
         // Check 4: Sufficient disk space (at least one installable disk exists)
@@ -289,11 +284,11 @@ impl Screen for WelcomeScreen {
                     disks.len(),
                     disks.iter().filter(|d| d.is_installable()).count()
                 );
-            }
+            },
             Err(e) => {
                 warn!("Disk detection failed: {}", e);
                 self.checks.disk_space = false;
-            }
+            },
         }
 
         debug!(
@@ -309,11 +304,11 @@ impl Screen for WelcomeScreen {
             Ok(mode) => {
                 debug!("Detected boot mode: {:?}", mode);
                 self.boot_mode = mode;
-            }
+            },
             Err(e) => {
                 warn!("Failed to detect boot mode: {}", e);
                 self.boot_mode = BootMode::Unknown;
-            }
+            },
         }
 
         // Set button as focused

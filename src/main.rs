@@ -2,26 +2,28 @@
 //!
 //! Main entry point for the application.
 
+use std::io;
+
 use anyhow::Result;
 use clap::Parser;
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
-    execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+use crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers,
 };
-use ratatui::{Terminal, backend::CrosstermBackend};
-use std::io;
+use crossterm::execute;
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
+use ekaos_install::app::{App, AppMode, Screen as AppScreen};
+use ekaos_install::ui::components::Component;
+use ekaos_install::ui::{
+    ConfigurationScreen, ConfirmationScreen, DiskSelectionScreen, HelpPanel, InstallationScreen,
+    Layout, PartitionPlanningScreen, Screen, ScreenAction, SuccessScreen, WelcomeScreen,
+    render_footer, render_header,
+};
+use ekaos_install::{APP_NAME, VERSION};
+use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use tracing::{info, warn};
-
-use ekaos_install::{
-    APP_NAME, VERSION,
-    app::{App, AppMode, Screen as AppScreen},
-    ui::{
-        ConfigurationScreen, ConfirmationScreen, DiskSelectionScreen, HelpPanel,
-        InstallationScreen, Layout, PartitionPlanningScreen, Screen, ScreenAction, SuccessScreen,
-        WelcomeScreen, components::Component, render_footer, render_header,
-    },
-};
 
 /// Command-line arguments
 #[derive(Parser, Debug)]
@@ -210,7 +212,7 @@ fn run_event_loop(
                         );
                     }
                     partition_planning_screen.on_enter();
-                }
+                },
                 AppScreen::Configuration => {
                     // Pass boot mode to configuration screen
                     configuration_screen.set_boot_mode(welcome_screen.boot_mode);
@@ -224,13 +226,13 @@ fn run_event_loop(
                         partition_planning_screen.luks_passphrase().to_string(),
                     );
                     configuration_screen.on_enter();
-                }
+                },
                 AppScreen::Confirmation => {
                     // Pass configuration to confirmation screen for review
                     let config = configuration_screen.get_config().clone();
                     confirmation_screen.set_config(config);
                     confirmation_screen.on_enter();
-                }
+                },
                 AppScreen::Installation => {
                     // Start installation with confirmed configuration
                     if let Some(config) = confirmation_screen.get_config() {
@@ -241,7 +243,7 @@ fn run_event_loop(
                         );
                     }
                     installation_screen.on_enter();
-                }
+                },
                 AppScreen::Complete => success_screen.on_enter(),
             }
 
@@ -267,7 +269,7 @@ fn run_event_loop(
                 AppScreen::DiskSelection => disk_selection_screen.render(frame, content_area),
                 AppScreen::PartitionPlanning => {
                     partition_planning_screen.render(frame, content_area)
-                }
+                },
                 AppScreen::Configuration => configuration_screen.render(frame, content_area),
                 AppScreen::Confirmation => confirmation_screen.render(frame, content_area),
                 AppScreen::Installation => installation_screen.render(frame, content_area),
@@ -323,7 +325,7 @@ fn run_event_loop(
                     AppScreen::DiskSelection => disk_selection_screen.handle_input(key.code),
                     AppScreen::PartitionPlanning => {
                         partition_planning_screen.handle_input(key.code)
-                    }
+                    },
                     AppScreen::Configuration => configuration_screen.handle_input(key.code),
                     AppScreen::Confirmation => confirmation_screen.handle_input(key.code),
                     AppScreen::Installation => installation_screen.handle_input(key.code),
@@ -347,19 +349,19 @@ fn run_event_loop(
                         if can_proceed {
                             app.next_screen()?;
                         }
-                    }
+                    },
                     ScreenAction::Back => {
                         app.previous_screen()?;
-                    }
+                    },
                     ScreenAction::Exit => {
                         app.exit();
-                    }
+                    },
                     ScreenAction::ToggleHelp => {
                         app.toggle_help();
-                    }
+                    },
                     ScreenAction::None => {
                         // Do nothing
-                    }
+                    },
                 }
             }
         }

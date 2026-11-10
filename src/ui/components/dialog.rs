@@ -1,11 +1,9 @@
 //! Confirmation dialog component
 
-use ratatui::{
-    Frame,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Clear, Paragraph},
-};
+use ratatui::Frame;
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use super::{Component, Focusable, InputEvent, Interactive};
 
@@ -116,12 +114,12 @@ impl Interactive for ConfirmDialog {
             InputEvent::Left | InputEvent::Right | InputEvent::Tab => {
                 self.focused_button = 1 - self.focused_button;
                 true
-            }
+            },
             InputEvent::Enter => true,
             InputEvent::Escape => {
                 self.focused_button = 1; // Select "No" on escape
                 true
-            }
+            },
             _ => false,
         }
     }
