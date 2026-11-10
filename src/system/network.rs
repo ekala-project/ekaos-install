@@ -141,6 +141,7 @@ pub fn check_network_with_timeout(timeout: Duration) -> Result<NetworkStatus> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::MockEnv;
 
     #[test]
     fn test_network_status_display() {
@@ -170,17 +171,15 @@ mod tests {
 
     #[test]
     fn test_mock_network_check() {
-        std::env::set_var("EKAOS_MOCK", "1");
+        let _env = MockEnv::enabled();
         let status = check_network().unwrap();
         assert_eq!(status, NetworkStatus::Connected);
-        std::env::remove_var("EKAOS_MOCK");
     }
 
     #[test]
     fn test_real_network_check() {
         // This will test actual network connectivity
-        std::env::remove_var("EKAOS_MOCK");
-        std::env::remove_var("EKAOS_INSTALL_MOCK");
+        let _env = MockEnv::disabled();
 
         let status = check_network().unwrap();
         // Network may or may not be available in test environment
@@ -201,9 +200,8 @@ mod tests {
 
     #[test]
     fn test_network_with_timeout() {
-        std::env::set_var("EKAOS_MOCK", "1");
+        let _env = MockEnv::enabled();
         let status = check_network_with_timeout(Duration::from_secs(1)).unwrap();
         assert_eq!(status, NetworkStatus::Connected);
-        std::env::remove_var("EKAOS_MOCK");
     }
 }
