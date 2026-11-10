@@ -1,5 +1,5 @@
 {
-  description = "EkaCI flake";
+  description = "EkaOS installer flake";
 
   inputs = {
     utils.url = "github:numtide/flake-utils";
@@ -29,7 +29,7 @@
         ];
       };
 
-      packages.default = legacyPackages.ekapkgs-update;
+      packages.default = legacyPackages.ekaos-install;
       devShells.default = legacyPackages.dev-shell;
       formatter =
         let
