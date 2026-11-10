@@ -341,6 +341,7 @@ fn should_use_mock() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::MockEnv;
 
     #[test]
     fn test_disk_type_display() {
@@ -433,19 +434,17 @@ mod tests {
 
     #[test]
     fn test_mock_detection() {
-        std::env::set_var("EKAOS_MOCK", "1");
+        let _env = MockEnv::enabled();
         let disks = detect_disks().unwrap();
         assert_eq!(disks.len(), 2);
         assert_eq!(disks[0].name, "sda");
         assert_eq!(disks[1].name, "nvme0n1");
-        std::env::remove_var("EKAOS_MOCK");
     }
 
     #[test]
     fn test_real_detection() {
         // This will test actual disk detection
-        std::env::remove_var("EKAOS_MOCK");
-        std::env::remove_var("EKAOS_INSTALL_MOCK");
+        let _env = MockEnv::disabled();
 
         // May fail if lsblk is not available
         if let Ok(disks) = detect_disks() {

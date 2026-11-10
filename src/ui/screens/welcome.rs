@@ -381,6 +381,7 @@ impl WelcomeScreen {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::MockEnv;
 
     #[test]
     fn test_welcome_screen_creation() {
@@ -392,17 +393,16 @@ mod tests {
 
     #[test]
     fn test_preflight_checks() {
-        std::env::set_var("EKAOS_MOCK", "1");
+        let _env = MockEnv::enabled();
         let mut screen = WelcomeScreen::new(true, false);
         screen.on_enter();
         assert!(screen.all_checks_passed());
         assert!(screen.can_proceed());
-        std::env::remove_var("EKAOS_MOCK");
     }
 
     #[test]
     fn test_navigation() {
-        std::env::set_var("EKAOS_MOCK", "1");
+        let _env = MockEnv::enabled();
         let mut screen = WelcomeScreen::new(true, false);
         screen.on_enter(); // Sets up button focus and runs checks in mock mode
 
@@ -414,7 +414,6 @@ mod tests {
 
         // q should exit
         assert_eq!(screen.handle_input(KeyCode::Char('q')), ScreenAction::Exit);
-        std::env::remove_var("EKAOS_MOCK");
     }
 
     #[test]

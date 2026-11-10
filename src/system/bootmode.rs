@@ -88,6 +88,7 @@ fn should_use_mock() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::MockEnv;
 
     #[test]
     fn test_boot_mode_display() {
@@ -113,17 +114,15 @@ mod tests {
 
     #[test]
     fn test_mock_detection() {
-        std::env::set_var("EKAOS_MOCK", "1");
+        let _env = MockEnv::enabled();
         let mode = detect_boot_mode().unwrap();
         assert_eq!(mode, BootMode::Uefi);
-        std::env::remove_var("EKAOS_MOCK");
     }
 
     #[test]
     fn test_real_detection() {
         // This test will detect the actual boot mode of the test system
-        std::env::remove_var("EKAOS_MOCK");
-        std::env::remove_var("EKAOS_INSTALL_MOCK");
+        let _env = MockEnv::disabled();
 
         let mode = detect_boot_mode().unwrap();
         // Should be either UEFI or BIOS, not Unknown
