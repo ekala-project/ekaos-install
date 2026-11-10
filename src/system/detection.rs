@@ -174,6 +174,7 @@ fn should_use_mock() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::MockEnv;
 
     #[test]
     fn test_system_info_default() {
@@ -184,23 +185,17 @@ mod tests {
 
     #[test]
     fn test_mock_detection() {
-        // Clean up first in case other tests left vars set
-        std::env::remove_var("EKAOS_INSTALL_MOCK");
-        std::env::set_var("EKAOS_MOCK", "1");
+        let _env = MockEnv::enabled();
 
         let info = detect_system().unwrap();
         assert!(info.cpu_model.contains("Simulated"));
         assert_eq!(info.cpu_cores, 8);
         assert_eq!(info.ram_gb, 16.0);
-
-        std::env::remove_var("EKAOS_MOCK");
     }
 
     #[test]
     fn test_real_detection() {
-        // Clean up environment
-        std::env::remove_var("EKAOS_MOCK");
-        std::env::remove_var("EKAOS_INSTALL_MOCK");
+        let _env = MockEnv::disabled();
 
         let info = detect_system().unwrap();
         // Should have detected something
@@ -249,13 +244,9 @@ mod tests {
 
     #[test]
     fn test_is_root_mock() {
-        // Clean up first
-        std::env::remove_var("EKAOS_INSTALL_MOCK");
-        std::env::set_var("EKAOS_MOCK", "1");
+        let _env = MockEnv::enabled();
 
         assert!(is_root());
-
-        std::env::remove_var("EKAOS_MOCK");
     }
 
     #[test]

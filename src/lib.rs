@@ -22,6 +22,9 @@ pub mod nixos;
 pub mod system;
 pub mod ui;
 
+#[cfg(test)]
+mod test_support;
+
 pub use error::{InstallerError, Result};
 
 /// Application version

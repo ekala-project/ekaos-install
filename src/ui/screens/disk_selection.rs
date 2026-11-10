@@ -384,6 +384,7 @@ impl Screen for DiskSelectionScreen {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::MockEnv;
 
     #[test]
     fn test_disk_selection_screen_creation() {
@@ -395,6 +396,7 @@ mod tests {
 
     #[test]
     fn test_navigation() {
+        let _env = MockEnv::enabled();
         let mut screen = DiskSelectionScreen::new();
 
         // Trigger detection
@@ -426,6 +428,7 @@ mod tests {
 
     #[test]
     fn test_on_enter_detection() {
+        let _env = MockEnv::enabled();
         let mut screen = DiskSelectionScreen::new();
         assert!(!screen.detected);
 
