@@ -3,10 +3,12 @@
 //! This module provides a safe abstraction for executing system commands
 //! with support for both mock (testing) and real execution modes.
 
-use crate::error::{CommandError, Result};
 use std::collections::HashMap;
 use std::process::{Command, Output, Stdio};
+
 use tracing::{debug, info, warn};
+
+use crate::error::{CommandError, Result};
 
 /// Trait for command execution (allows mocking)
 pub trait CommandExecutor: Send + Sync {

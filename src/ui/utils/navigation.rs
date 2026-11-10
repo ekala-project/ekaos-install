@@ -1,11 +1,9 @@
 //! Navigation hint rendering utilities
 
-use ratatui::{
-    Frame,
-    layout::{Alignment, Rect},
-    text::{Line, Span},
-    widgets::Paragraph,
-};
+use ratatui::Frame;
+use ratatui::layout::{Alignment, Rect};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::Paragraph;
 
 use crate::ui::theme::AppTheme;
 
@@ -68,9 +66,10 @@ pub fn render_navigation_hints(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
+
+    use super::*;
 
     #[test]
     fn test_render_navigation_hints() {

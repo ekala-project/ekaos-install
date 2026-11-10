@@ -2,9 +2,11 @@
 //!
 //! Detects whether the system is booted in UEFI or legacy BIOS mode.
 
-use crate::error::Result;
 use std::path::Path;
+
 use tracing::debug;
+
+use crate::error::Result;
 
 /// Boot mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

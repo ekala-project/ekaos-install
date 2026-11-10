@@ -3,23 +3,18 @@
 //! Shows the automatic partition layout that will be created.
 
 use crossterm::event::KeyCode;
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
-};
+use ratatui::Frame;
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::Color;
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Paragraph};
 use tracing::debug;
 
-use crate::system::BootMode;
-use crate::ui::{
-    components::{Component, Focusable, InputField, Interactive},
-    theme::AppTheme,
-    utils::{keycode_to_input_event, render_navigation_hints},
-};
-
 use super::{Screen, ScreenAction};
+use crate::system::BootMode;
+use crate::ui::components::{Component, Focusable, InputField, Interactive};
+use crate::ui::theme::AppTheme;
+use crate::ui::utils::{keycode_to_input_event, render_navigation_hints};
 
 /// Available filesystem options for root partition
 const ROOT_FILESYSTEM_OPTIONS: &[(&str, &str)] = &[
@@ -162,7 +157,7 @@ impl PartitionPlanningScreen {
                 // Default to UEFI if unknown
                 debug!("Unknown boot mode, defaulting to UEFI layout");
                 self.generate_uefi_layout();
-            }
+            },
         }
     }
 
@@ -833,7 +828,7 @@ impl Screen for PartitionPlanningScreen {
                         ("?", "Help"),
                     ]
                 }
-            }
+            },
         };
 
         render_navigation_hints(frame, &hints, &self.theme, chunks[6]);
@@ -879,7 +874,7 @@ impl Screen for PartitionPlanningScreen {
                         self.luks_focused = false;
                     }
                     ScreenAction::None
-                }
+                },
                 KeyCode::BackTab => {
                     if self.luks_field_idx == 1 {
                         self.luks_field_idx = 0;
@@ -887,7 +882,7 @@ impl Screen for PartitionPlanningScreen {
                         self.luks_focused = false;
                     }
                     ScreenAction::None
-                }
+                },
                 _ => {
                     if let Some(event) = keycode_to_input_event(key) {
                         if self.luks_field_idx == 0 {
@@ -900,7 +895,7 @@ impl Screen for PartitionPlanningScreen {
                         }
                     }
                     ScreenAction::None
-                }
+                },
             }
         }
         // If swap input field is focused, handle that separately
@@ -910,26 +905,26 @@ impl Screen for PartitionPlanningScreen {
                     // Increment swap by 1 GB
                     self.adjust_swap_size(1);
                     ScreenAction::None
-                }
+                },
                 KeyCode::Down => {
                     // Decrement swap by 1 GB
                     self.adjust_swap_size(-1);
                     ScreenAction::None
-                }
+                },
                 KeyCode::Tab | KeyCode::Enter => {
                     // Unfocus and validate when exiting swap input
                     self.swap_focused = false;
                     self.swap_input.set_focused(false);
                     self.update_swap_size();
                     ScreenAction::None
-                }
+                },
                 _ => {
                     // Pass input to the InputField
                     if let Some(event) = keycode_to_input_event(key) {
                         Interactive::handle_input(&mut self.swap_input, event);
                     }
                     ScreenAction::None
-                }
+                },
             }
         } else {
             // Handle two-level navigation based on focus mode
@@ -944,26 +939,26 @@ impl Screen for PartitionPlanningScreen {
                         KeyCode::Up => {
                             self.select_previous_partition();
                             ScreenAction::None
-                        }
+                        },
                         KeyCode::Down => {
                             self.select_next_partition();
                             ScreenAction::None
-                        }
+                        },
                         KeyCode::Enter => {
                             // Enter edit mode for the selected partition
                             self.enter_edit_mode();
                             ScreenAction::None
-                        }
+                        },
                         KeyCode::Right => {
                             // Continue to next screen (only in list mode)
                             ScreenAction::Next
-                        }
+                        },
                         KeyCode::Tab => {
                             // Quick access to swap size input (backward compatibility)
                             self.swap_focused = true;
                             self.swap_input.set_focused(true);
                             ScreenAction::None
-                        }
+                        },
                         KeyCode::Char('e') => {
                             // Toggle encryption
                             self.luks_enabled = !self.luks_enabled;
@@ -977,10 +972,10 @@ impl Screen for PartitionPlanningScreen {
                                 self.luks_passphrase_confirm_input.set_value("");
                             }
                             ScreenAction::None
-                        }
+                        },
                         _ => ScreenAction::None,
                     }
-                }
+                },
                 FocusMode::PartitionEdit => {
                     match key {
                         KeyCode::Up => {
@@ -991,7 +986,7 @@ impl Screen for PartitionPlanningScreen {
                                 self.select_previous_field();
                             }
                             ScreenAction::None
-                        }
+                        },
                         KeyCode::Down => {
                             // If on Size field, decrement swap; otherwise navigate fields
                             if self.selected_field == Some(EditableField::Size) {
@@ -1000,17 +995,17 @@ impl Screen for PartitionPlanningScreen {
                                 self.select_next_field();
                             }
                             ScreenAction::None
-                        }
+                        },
                         KeyCode::Left => {
                             // Cycle filesystem left (only if on FilesystemType field)
                             self.cycle_filesystem(-1);
                             ScreenAction::None
-                        }
+                        },
                         KeyCode::Right => {
                             // Cycle filesystem right (only if on FilesystemType field)
                             self.cycle_filesystem(1);
                             ScreenAction::None
-                        }
+                        },
                         KeyCode::Enter => {
                             if self.selected_field == Some(EditableField::Size) {
                                 // If on Size field, focus the input
@@ -1022,10 +1017,10 @@ impl Screen for PartitionPlanningScreen {
                                 self.exit_edit_mode();
                                 ScreenAction::None
                             }
-                        }
+                        },
                         _ => ScreenAction::None,
                     }
-                }
+                },
             }
         }
     }
