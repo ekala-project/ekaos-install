@@ -52,13 +52,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
+      # .rustfmt.toml (EEP-0031) uses unstable options, which need nightly
+      # rustfmt; the flake dev shell provides it via fenix.
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
 
       - name: Check formatting
-        run: cargo fmt -- --check
+        run: nix develop --command cargo fmt --all -- --check
 
   clippy:
     name: Clippy
