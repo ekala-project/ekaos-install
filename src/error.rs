@@ -231,7 +231,8 @@ impl InstallerError {
     pub fn suggestion(&self) -> Option<String> {
         match self {
             InstallerError::Disk(DiskError::NotFound(disk)) => Some(format!(
-                "Please check that disk '{}' is connected and detected by the system. Run 'lsblk' to see available disks.",
+                "Please check that disk '{}' is connected and detected by the system. Run 'lsblk' \
+                 to see available disks.",
                 disk
             )),
             InstallerError::Disk(DiskError::DiskBusy(_)) => Some(
@@ -243,7 +244,8 @@ impl InstallerError {
                     .to_string(),
             ),
             InstallerError::Command(CommandError::NotFound(cmd)) => Some(format!(
-                "The command '{}' is not available. Make sure you're running from NixOS installation media.",
+                "The command '{}' is not available. Make sure you're running from NixOS \
+                 installation media.",
                 cmd
             )),
             InstallerError::Filesystem(FilesystemError::MountFailed { .. }) => Some(

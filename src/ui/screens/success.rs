@@ -3,17 +3,15 @@
 //! Displays installation summary and next steps.
 
 use crossterm::event::KeyCode;
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
-};
-
-use crate::ui::{theme::AppTheme, utils::render_navigation_hints};
+use ratatui::Frame;
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Modifier, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 
 use super::{Screen, ScreenAction};
+use crate::ui::theme::AppTheme;
+use crate::ui::utils::render_navigation_hints;
 
 /// Success screen state
 pub struct SuccessScreen {
@@ -168,15 +166,15 @@ impl Screen for SuccessScreen {
             KeyCode::Up => {
                 self.select_previous();
                 ScreenAction::None
-            }
+            },
             KeyCode::Down => {
                 self.select_next();
                 ScreenAction::None
-            }
+            },
             KeyCode::Enter => {
                 // For now, just exit. In a real implementation, this would trigger a reboot
                 ScreenAction::Exit
-            }
+            },
             _ => ScreenAction::None,
         }
     }

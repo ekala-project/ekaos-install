@@ -7,13 +7,11 @@
 //! - Error display
 //! - Focus management
 
-use ratatui::{
-    Frame,
-    layout::Rect,
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
-};
+use ratatui::Frame;
+use ratatui::layout::Rect;
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, Paragraph};
 
 use super::{Component, Focusable, InputEvent, Interactive, Validatable};
 
@@ -226,31 +224,31 @@ impl Interactive for InputField {
             InputEvent::Char(c) => {
                 self.insert_char(c);
                 true
-            }
+            },
             InputEvent::Backspace => {
                 self.delete_char();
                 true
-            }
+            },
             InputEvent::Delete => {
                 self.delete_char_forward();
                 true
-            }
+            },
             InputEvent::Left => {
                 self.move_cursor_left();
                 true
-            }
+            },
             InputEvent::Right => {
                 self.move_cursor_right();
                 true
-            }
+            },
             InputEvent::Home => {
                 self.move_cursor_home();
                 true
-            }
+            },
             InputEvent::End => {
                 self.move_cursor_end();
                 true
-            }
+            },
             _ => false,
         }
     }

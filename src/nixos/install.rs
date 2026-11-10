@@ -3,13 +3,14 @@
 //! Handles the actual NixOS installation process including configuration generation,
 //! nixos-install execution, and post-installation verification.
 
-use crate::config::InstallConfig;
-use crate::error::{CommandError, ConfigError, InstallerError};
-use crate::system::command::{CommandExecutor, RealExecutor};
 use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread;
 use std::time::Duration;
+
+use crate::config::InstallConfig;
+use crate::error::{CommandError, ConfigError, InstallerError};
+use crate::system::command::{CommandExecutor, RealExecutor};
 
 /// Installation progress state
 #[derive(Debug, Clone, PartialEq)]
@@ -170,9 +171,7 @@ pub struct MockInstallExecutor {
 impl MockInstallExecutor {
     /// Create a new mock installation executor
     pub fn new() -> Self {
-        Self {
-            should_fail: false,
-        }
+        Self { should_fail: false }
     }
 
     /// Set whether the installation should fail (for testing)
@@ -383,9 +382,10 @@ fn run_installation_impl(
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
     use crate::config::{BootLoader, UserConfig};
-    use std::path::PathBuf;
 
     fn create_test_config() -> InstallConfig {
         InstallConfig {
@@ -472,17 +472,17 @@ mod tests {
         match messages.last() {
             Some(InstallMessage::Success) => {
                 // Expected in a real environment
-            }
+            },
             Some(InstallMessage::Error(_)) => {
                 // Expected in test environment (can't write to /mnt)
-            }
+            },
             _ => {
                 // Check if we got at least one progress message
                 let has_progress = messages
                     .iter()
                     .any(|m| matches!(m, InstallMessage::Progress(_)));
                 assert!(has_progress, "Expected at least one progress message");
-            }
+            },
         }
     }
 }

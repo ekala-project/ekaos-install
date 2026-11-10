@@ -2,25 +2,21 @@
 //!
 //! Displays real-time installation progress with log output.
 
-use crossterm::event::KeyCode;
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
-};
 use std::sync::mpsc::Receiver;
 
-use crate::config::InstallConfig;
-use crate::nixos::{InstallMessage, InstallProgress, InstallStage, run_installation_async};
-use crate::ui::{
-    components::{Component, ProgressBar},
-    theme::AppTheme,
-    utils::render_navigation_hints,
-};
+use crossterm::event::KeyCode;
+use ratatui::Frame;
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Modifier, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 
 use super::{Screen, ScreenAction};
+use crate::config::InstallConfig;
+use crate::nixos::{InstallMessage, InstallProgress, InstallStage, run_installation_async};
+use crate::ui::components::{Component, ProgressBar};
+use crate::ui::theme::AppTheme;
+use crate::ui::utils::render_navigation_hints;
 
 /// Tips shown during installation
 const INSTALL_TIPS: &[&str] = &[
@@ -132,25 +128,25 @@ impl InstallationScreen {
                 match msg {
                     InstallMessage::Progress(progress) => {
                         self.progress = Some(progress);
-                    }
+                    },
                     InstallMessage::Log(line) => {
                         self.log_lines.push(line);
                         // Auto-scroll to bottom
                         self.scroll_position = self.log_lines.len().saturating_sub(1);
-                    }
+                    },
                     InstallMessage::Success => {
                         self.is_running = false;
                         self.is_complete = true;
                         self.log_lines
                             .push("✓ Installation completed successfully!".to_string());
-                    }
+                    },
                     InstallMessage::Error(err) => {
                         self.is_running = false;
                         self.has_error = true;
                         self.error_message = Some(err.clone());
                         self.log_lines
                             .push(format!("✗ Installation failed: {}", err));
-                    }
+                    },
                 }
             }
         }
@@ -177,10 +173,10 @@ impl InstallationScreen {
                 InstallStage::GeneratingConfig => "Generating configuration files...".to_string(),
                 InstallStage::GeneratingHardwareConfig => {
                     "Detecting hardware configuration...".to_string()
-                }
+                },
                 InstallStage::Installing => {
                     "Installing NixOS (this may take a while)...".to_string()
-                }
+                },
                 InstallStage::Verifying => "Verifying installation...".to_string(),
                 InstallStage::Complete => "Installation complete!".to_string(),
                 InstallStage::Failed(ref err) => format!("Installation failed: {}", err),
@@ -354,15 +350,15 @@ impl Screen for InstallationScreen {
             KeyCode::Char('r') if self.has_error => {
                 self.retry_installation();
                 ScreenAction::None
-            }
+            },
             KeyCode::Up => {
                 self.scroll_up();
                 ScreenAction::None
-            }
+            },
             KeyCode::Down => {
                 self.scroll_down();
                 ScreenAction::None
-            }
+            },
             _ => ScreenAction::None,
         }
     }

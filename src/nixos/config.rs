@@ -2,10 +2,11 @@
 //!
 //! Generates a valid NixOS configuration file from the installation configuration.
 
-use crate::config::{BootLoader, InstallConfig};
-use crate::error::{ConfigError, InstallerError};
 use std::path::Path;
 use std::process::Command;
+
+use crate::config::{BootLoader, InstallConfig};
+use crate::error::{ConfigError, InstallerError};
 
 /// Generate a configuration.nix file from the installation configuration
 pub fn generate_configuration(config: &InstallConfig) -> Result<String, InstallerError> {
@@ -42,7 +43,7 @@ pub fn generate_configuration(config: &InstallConfig) -> Result<String, Installe
         BootLoader::SystemdBoot => {
             nix_config.push_str("  boot.loader.systemd-boot.enable = true;\n");
             nix_config.push_str("  boot.loader.efi.canTouchEfiVariables = true;\n");
-        }
+        },
         BootLoader::Grub => {
             nix_config.push_str("  boot.loader.grub.enable = true;\n");
             nix_config.push_str(&format!(
@@ -53,7 +54,7 @@ pub fn generate_configuration(config: &InstallConfig) -> Result<String, Installe
             nix_config.push_str(
                 "  # boot.loader.efi.canTouchEfiVariables = true; # Uncomment for UEFI\n",
             );
-        }
+        },
     }
     nix_config.push_str("\n");
 

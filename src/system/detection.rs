@@ -2,10 +2,12 @@
 //!
 //! Detects CPU, RAM, architecture, and other system properties.
 
-use crate::error::Result;
 use std::fs;
 use std::process::Command;
+
 use tracing::debug;
+
+use crate::error::Result;
 
 /// System information
 #[derive(Debug, Clone)]

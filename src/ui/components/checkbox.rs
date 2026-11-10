@@ -2,13 +2,11 @@
 //!
 //! Multi-select checkbox list with keyboard navigation
 
-use ratatui::{
-    Frame,
-    layout::Rect,
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem},
-};
+use ratatui::Frame;
+use ratatui::layout::Rect;
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Block, Borders, List, ListItem};
 
 use super::{Component, Focusable, InputEvent, Interactive};
 
@@ -136,15 +134,15 @@ impl Interactive for CheckboxList {
             InputEvent::Up => {
                 self.move_up();
                 true
-            }
+            },
             InputEvent::Down => {
                 self.move_down();
                 true
-            }
+            },
             InputEvent::Char(' ') | InputEvent::Enter => {
                 self.toggle_current();
                 true
-            }
+            },
             _ => false,
         }
     }
