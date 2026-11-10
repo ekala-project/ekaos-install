@@ -295,10 +295,12 @@ impl<'a> SafeCommand<'a> {
     pub fn description(&self) -> &str {
         &self.description
     }
+}
 
-    /// Get the full command as a string (for display purposes)
-    pub fn to_string(&self) -> String {
-        format!("{} {}", self.command, self.args.join(" "))
+/// Formats the full command line (for display purposes)
+impl std::fmt::Display for SafeCommand<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.command, self.args.join(" "))
     }
 }
 

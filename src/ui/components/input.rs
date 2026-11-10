@@ -17,6 +17,9 @@ use ratatui::{
 
 use super::{Component, Focusable, InputEvent, Interactive, Validatable};
 
+/// Validation callback: returns `Some(error message)` when the value is invalid
+type Validator = Box<dyn Fn(&str) -> Option<String>>;
+
 /// Text input field with validation support
 pub struct InputField {
     /// Label for the input field
@@ -30,7 +33,7 @@ pub struct InputField {
     /// Whether the field is enabled
     enabled: bool,
     /// Validation function
-    validator: Option<Box<dyn Fn(&str) -> Option<String>>>,
+    validator: Option<Validator>,
     /// Cached validation error
     error: Option<String>,
     /// Placeholder text

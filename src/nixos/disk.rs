@@ -9,7 +9,7 @@ use std::process::Command;
 use tracing::debug;
 
 /// Disk type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DiskType {
     /// Hard Disk Drive (HDD)
@@ -28,14 +28,9 @@ pub enum DiskType {
     #[serde(rename = "rom")]
     Rom,
     /// Unknown type
+    #[default]
     #[serde(other)]
     Unknown,
-}
-
-impl Default for DiskType {
-    fn default() -> Self {
-        DiskType::Unknown
-    }
 }
 
 impl DiskType {
