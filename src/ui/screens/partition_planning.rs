@@ -237,7 +237,7 @@ impl PartitionPlanningScreen {
 
             if self.swap_size_gb != validated_size {
                 self.swap_size_gb = validated_size;
-                self.swap_input.set_value(&validated_size.to_string());
+                self.swap_input.set_value(validated_size.to_string());
                 self.generate_partition_layout();
             }
         }
@@ -246,7 +246,7 @@ impl PartitionPlanningScreen {
     /// Adjust swap size by delta (in GB)
     fn adjust_swap_size(&mut self, delta: i64) {
         let new_size = (self.swap_size_gb as i64 + delta).max(1) as u64;
-        self.swap_input.set_value(&new_size.to_string());
+        self.swap_input.set_value(new_size.to_string());
         self.update_swap_size();
     }
 
@@ -318,13 +318,11 @@ impl PartitionPlanningScreen {
         let mut bar_chars = vec![' '; bar_width];
         let mut pos = 0;
 
-        for (_idx, (_, percent, _)) in segments.iter().enumerate() {
+        for (_, percent, _) in segments.iter() {
             let segment_width = (bar_width * (*percent as usize) / 100).max(1);
             let end_pos = (pos + segment_width).min(bar_width);
 
-            for i in pos..end_pos {
-                bar_chars[i] = '█';
-            }
+            bar_chars[pos..end_pos].fill('█');
             pos = end_pos;
         }
 

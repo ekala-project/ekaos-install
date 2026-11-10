@@ -142,45 +142,58 @@ fn run_app(mode: AppMode, dry_run: bool) -> Result<()> {
     let mut app = App::new(mode, dry_run);
 
     // Create screen instances
-    let mut welcome_screen = WelcomeScreen::new(app.is_mock(), dry_run);
-    let mut disk_selection_screen = DiskSelectionScreen::new();
-    let mut partition_planning_screen = PartitionPlanningScreen::new();
-    let mut configuration_screen = ConfigurationScreen::new();
-    let mut confirmation_screen = ConfirmationScreen::new();
-    let mut installation_screen = InstallationScreen::new();
-    let mut success_screen = SuccessScreen::new();
+    let mut screens = Screens::new(app.is_mock(), dry_run);
 
     // Call on_enter for initial screen
-    welcome_screen.on_enter();
+    screens.welcome_screen.on_enter();
 
     // Run the event loop
-    run_event_loop(
-        terminal,
-        &mut app,
-        &mut welcome_screen,
-        &mut disk_selection_screen,
-        &mut partition_planning_screen,
-        &mut configuration_screen,
-        &mut confirmation_screen,
-        &mut installation_screen,
-        &mut success_screen,
-    )
+    run_event_loop(terminal, &mut app, &mut screens)
     // Terminal is automatically cleaned up when terminal_guard goes out of scope
     // This happens even if the event loop panics or returns an error
+}
+
+/// One instance of every screen in the installer flow
+struct Screens {
+    welcome_screen: WelcomeScreen,
+    disk_selection_screen: DiskSelectionScreen,
+    partition_planning_screen: PartitionPlanningScreen,
+    configuration_screen: ConfigurationScreen,
+    confirmation_screen: ConfirmationScreen,
+    installation_screen: InstallationScreen,
+    success_screen: SuccessScreen,
+}
+
+impl Screens {
+    /// Create all screens in their initial state
+    fn new(is_mock: bool, dry_run: bool) -> Self {
+        Self {
+            welcome_screen: WelcomeScreen::new(is_mock, dry_run),
+            disk_selection_screen: DiskSelectionScreen::new(),
+            partition_planning_screen: PartitionPlanningScreen::new(),
+            configuration_screen: ConfigurationScreen::new(),
+            confirmation_screen: ConfirmationScreen::new(),
+            installation_screen: InstallationScreen::new(),
+            success_screen: SuccessScreen::new(),
+        }
+    }
 }
 
 /// Main event loop
 fn run_event_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
-    welcome_screen: &mut WelcomeScreen,
-    disk_selection_screen: &mut DiskSelectionScreen,
-    partition_planning_screen: &mut PartitionPlanningScreen,
-    configuration_screen: &mut ConfigurationScreen,
-    confirmation_screen: &mut ConfirmationScreen,
-    installation_screen: &mut InstallationScreen,
-    success_screen: &mut SuccessScreen,
+    screens: &mut Screens,
 ) -> Result<()> {
+    let Screens {
+        welcome_screen,
+        disk_selection_screen,
+        partition_planning_screen,
+        configuration_screen,
+        confirmation_screen,
+        installation_screen,
+        success_screen,
+    } = screens;
     let mut previous_screen = app.current_screen;
 
     loop {
